@@ -23,7 +23,7 @@ run-orders:
 	go -C services/orders run ./cmd
 
 license:
-	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/license.ps1 -Fix
+	pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/license.ps1 -Fix
 
 license-check:
-	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/license.ps1
+	pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/license.ps1
