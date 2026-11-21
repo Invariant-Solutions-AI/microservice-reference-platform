@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/server"
 )
 
 func main() {
@@ -23,10 +24,10 @@ func main() {
 
 	addr := os.Getenv("ORDERS_ADDR")
 
-	// initialize edge service
+	// initialize order service
 	s := &http.Server{
 		Addr: addr,
-		Handler: nil, // replace with your actual handler
+		Handler: server.NewHandler(),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		MaxHeaderBytes: 1 << 20, // 1 MB
