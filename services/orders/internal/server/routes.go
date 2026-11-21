@@ -3,9 +3,14 @@
 
 package server
 
-import "net/http"
+import (
+	"net/http"
 
-func registerRoutes(mux *http.ServeMux) {
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/application/orders"
+)
+
+func registerRoutes(mux *http.ServeMux, create *orders.CreateOrder) {
 	mux.HandleFunc("/health", health)
 	mux.HandleFunc("/ready", ready)
+	mux.HandleFunc("/orders", createOrder(create))
 }

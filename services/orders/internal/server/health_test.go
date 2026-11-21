@@ -11,28 +11,36 @@ import (
 
 func TestHealthEndpoints(t *testing.T) {
 	tests := []struct {
-		name string
-		path string
+		name    string
+		handler http.HandlerFunc
 	}{
 		{
-			name: "health",
-			path: "/health",
+			name:    "health",
+			handler: health,
 		},
 		{
-			name: "ready",
-			path: "/ready",
+			name:    "ready",
+			handler: ready,
 		},
 	}
 
-	handler := NewHandler()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"/",
+				nil,
+			)
 			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, req)
+
+			tt.handler(rec, req)
+
 			if rec.Code != http.StatusOK {
-				t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+				t.Errorf(
+					"status = %d, want %d",
+					rec.Code,
+					http.StatusOK,
+				)
 			}
 		})
 	}

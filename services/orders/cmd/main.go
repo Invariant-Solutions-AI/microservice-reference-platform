@@ -14,6 +14,9 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/server"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/persistence/memory"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/application/orders"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -24,10 +27,22 @@ func main() {
 
 	addr := os.Getenv("ORDERS_ADDR")
 
-	// initialize order service
+	// Infrastructure
+	repository := memory.NewOrderRepository()
+
+	// Application
+	createOrder := orders.NewCreateOrder(
+		repository,
+		uuid.New,
+		time.Now,
+	)
+
+	// Transport
+	handler := server.NewHandler(createOrder)
+
 	s := &http.Server{
 		Addr: addr,
-		Handler: server.NewHandler(),
+		Handler: handler,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		MaxHeaderBytes: 1 << 20, // 1 MB
