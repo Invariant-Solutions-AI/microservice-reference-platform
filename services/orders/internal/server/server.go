@@ -10,10 +10,10 @@ import (
 )
 
 // create the HTTP handler for the edge service
-func NewHandler(create *orders.CreateOrder) http.Handler {
+func NewHandler(create *orders.CreateOrder, get *orders.GetOrder) http.Handler {
 	mux := http.NewServeMux()
 	// define your routes
-	registerRoutes(mux, create)
+	registerRoutes(mux, create, get)
 
 	return mux
 }

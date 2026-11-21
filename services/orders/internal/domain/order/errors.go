@@ -11,6 +11,7 @@ var (
 	ErrItemsRequired      = errors.New("order must contain at least one item")
 	ErrProductIDRequired  = errors.New("product ID is required")
 	ErrInvalidQuantity    = errors.New("item quantity must be greater than zero")
+	ErrInvalidOrderID     = errors.New("invalid order ID")
 )
 
 // repository errors

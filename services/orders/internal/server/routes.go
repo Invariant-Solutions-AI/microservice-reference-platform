@@ -9,8 +9,9 @@ import (
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/application/orders"
 )
 
-func registerRoutes(mux *http.ServeMux, create *orders.CreateOrder) {
-	mux.HandleFunc("/health", health)
-	mux.HandleFunc("/ready", ready)
-	mux.HandleFunc("/orders", createOrder(create))
+func registerRoutes(mux *http.ServeMux, create *orders.CreateOrder, get *orders.GetOrder) {
+	mux.HandleFunc("GET /health", health)
+	mux.HandleFunc("GET /ready", ready)
+	mux.HandleFunc("POST /orders", createOrder(create))
+	mux.HandleFunc("GET /orders/{orderId}", getOrder(get))
 }

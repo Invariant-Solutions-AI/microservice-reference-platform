@@ -111,27 +111,3 @@ func handleCreateOrderError(
 		)
 	}
 }
-
-func newOrderResponse(
-	o *order.Order,
-) orderResponse {
-	items := make(
-		[]orderItemResponse,
-		len(o.Items),
-	)
-
-	for i, item := range o.Items {
-		items[i] = orderItemResponse{
-			ProductID: item.ProductID,
-			Quantity:  item.Quantity,
-		}
-	}
-
-	return orderResponse{
-		OrderID:    o.OrderID,
-		CustomerID: o.CustomerID,
-		Items:      items,
-		Status:     string(o.Status),
-		CreatedAt:  o.CreatedAt,
-	}
-}

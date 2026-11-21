@@ -37,8 +37,12 @@ func main() {
 		time.Now,
 	)
 
+	getOrder := orders.NewGetOrder(
+		repository,
+	)
+
 	// Transport
-	handler := server.NewHandler(createOrder)
+	handler := server.NewHandler(createOrder, getOrder)
 
 	s := &http.Server{
 		Addr:           addr,
