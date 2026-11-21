@@ -15,11 +15,11 @@ type Item struct {
 }
 
 type Order struct {
-	OrderID uuid.UUID
+	OrderID    uuid.UUID
 	CustomerID uuid.UUID
-	Items []Item
-	Status Status
-	CreatedAt time.Time
+	Items      []Item
+	Status     Status
+	CreatedAt  time.Time
 }
 
 func New(id uuid.UUID, customerID uuid.UUID, items []Item, CreatedAt time.Time) (*Order, error) {
@@ -38,10 +38,10 @@ func New(id uuid.UUID, customerID uuid.UUID, items []Item, CreatedAt time.Time) 
 		}
 	}
 	return &Order{
-		OrderID:      id,
-		CustomerID:   customerID,
-		Items:        append([]Item(nil), items...),
-		Status:       StatusPending,
-		CreatedAt: CreatedAt,
+		OrderID:    id,
+		CustomerID: customerID,
+		Items:      append([]Item(nil), items...),
+		Status:     StatusPending,
+		CreatedAt:  CreatedAt,
 	}, nil
 }

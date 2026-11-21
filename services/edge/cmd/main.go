@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/edge/internal/server"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -26,10 +26,10 @@ func main() {
 
 	// initialize edge service
 	s := &http.Server{
-		Addr: addr,
-		Handler: server.NewHandler(),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:           addr,
+		Handler:        server.NewHandler(),
+		ReadTimeout:    5 * time.Second,
+		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20, // 1 MB
 	}
 

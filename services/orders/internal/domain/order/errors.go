@@ -8,9 +8,9 @@ import "errors"
 // domain errors
 var (
 	ErrCustomerIDRequired = errors.New("customer ID is required")
-	ErrItemsRequired = errors.New("order must contain at least one item")
-	ErrProductIDRequired = errors.New("product ID is required")
-	ErrInvalidQuantity = errors.New("item quantity must be greater than zero")
+	ErrItemsRequired      = errors.New("order must contain at least one item")
+	ErrProductIDRequired  = errors.New("product ID is required")
+	ErrInvalidQuantity    = errors.New("item quantity must be greater than zero")
 )
 
 // repository errors

@@ -7,12 +7,12 @@ import (
 	"context"
 	"sync"
 
-	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/domain/order"
 	"github.com/google/uuid"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/domain/order"
 )
 
 type OrderRepository struct {
-	mux sync.Mutex
+	mux    sync.Mutex
 	orders map[string]*order.Order
 }
 
@@ -26,16 +26,16 @@ func (r *OrderRepository) Save(ctx context.Context, o *order.Order) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	
+
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
 	if _, exists := r.orders[o.OrderID.String()]; exists {
 		return order.ErrOrderAlreadyExists
 	}
-	
+
 	r.orders[o.OrderID.String()] = cloneOrder(o)
-	
+
 	return nil
 }
 

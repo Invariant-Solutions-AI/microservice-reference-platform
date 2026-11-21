@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
-	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/server"
-	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/persistence/memory"
-	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/application/orders"
 	"github.com/google/uuid"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/application/orders"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/persistence/memory"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/server"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -41,10 +41,10 @@ func main() {
 	handler := server.NewHandler(createOrder)
 
 	s := &http.Server{
-		Addr: addr,
-		Handler: handler,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:           addr,
+		Handler:        handler,
+		ReadTimeout:    5 * time.Second,
+		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20, // 1 MB
 	}
 
