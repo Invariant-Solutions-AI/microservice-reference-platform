@@ -1,0 +1,13 @@
+# Dependencies and generated output
+vendor/
+node_modules/
+bin/
+obj/
+dist/
+target/
+coverage/
+
+# Generated files
+**/*.pb.go
+**/*_generated.go
+**/zz_generated*.go

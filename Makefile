@@ -1,4 +1,4 @@
-.PHONY: build test fmt vet tidy run-edge run-orders
+.PHONY: build test fmt vet tidy run-edge run-orders license license-check
 
 build:
 	go build ./services/edge/cmd ./services/orders/cmd
@@ -21,3 +21,9 @@ run-edge:
 
 run-orders:
 	go -C services/orders run ./cmd
+
+license:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/license.ps1 -Fix
+
+license-check:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/license.ps1
