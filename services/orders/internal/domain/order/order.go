@@ -19,10 +19,10 @@ type Order struct {
 	CustomerID uuid.UUID
 	Items []Item
 	Status Status
-	CreationTime time.Time
+	CreatedAt time.Time
 }
 
-func New(id uuid.UUID, customerID uuid.UUID, items []Item, creationTime time.Time) (*Order, error) {
+func New(id uuid.UUID, customerID uuid.UUID, items []Item, CreatedAt time.Time) (*Order, error) {
 	if customerID == uuid.Nil {
 		return nil, ErrCustomerIDRequired
 	}
@@ -42,6 +42,6 @@ func New(id uuid.UUID, customerID uuid.UUID, items []Item, creationTime time.Tim
 		CustomerID:   customerID,
 		Items:        append([]Item(nil), items...),
 		Status:       StatusPending,
-		CreationTime: creationTime,
+		CreatedAt: CreatedAt,
 	}, nil
 }

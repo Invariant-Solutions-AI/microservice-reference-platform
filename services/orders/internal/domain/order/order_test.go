@@ -12,7 +12,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	creationTime := time.Date(2026, time.November, 19, 12, 0, 0, 0, time.UTC)
+	createdAt := time.Date(2026, time.November, 19, 12, 0, 0, 0, time.UTC)
 
 	items := []Item{
 		{
@@ -23,7 +23,7 @@ func TestNew(t *testing.T) {
 
 	orderID := uuid.New()
 	customerID := uuid.New()
-	got, err := New(orderID, customerID, items, creationTime)
+	got, err := New(orderID, customerID, items, createdAt)
 	if err != nil {
 		t.Fatalf("New() returned unexpected error: %v", err)
 	}
@@ -40,8 +40,8 @@ func TestNew(t *testing.T) {
 		t.Errorf("Status = %q, want %q", got.Status, StatusPending)
 	}
 
-	if !got.CreationTime.Equal(creationTime) {
-		t.Errorf("CreationTime = %v, want %v", got.CreationTime, creationTime)
+	if !got.CreatedAt.Equal(createdAt) {
+		t.Errorf("CreatedAt = %v, want %v", got.CreatedAt, createdAt)
 	}
 
 	if len(got.Items) != 1 {
@@ -54,7 +54,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestNewValidation(t *testing.T) {
-	creationTime := time.Date(2026, time.November, 19, 12, 0, 0, 0, time.UTC)
+	createdAt := time.Date(2026, time.November, 19, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name       string
@@ -122,7 +122,7 @@ func TestNewValidation(t *testing.T) {
 				uuid.New(),
 				tt.customerID,
 				tt.items,
-				creationTime,
+				createdAt,
 			)
 
 			if !errors.Is(err, tt.wantErr) {
@@ -146,13 +146,13 @@ func TestNewCopiesItems(t *testing.T) {
 
 	orderID := uuid.New()
 	customerID := uuid.New()
-	creationTime := time.Now()
+	createdAt := time.Now()
 
 	got, err := New(
 		orderID,
 		customerID,
 		items,
-		creationTime,
+		createdAt,
 	)
 	if err != nil {
 		t.Fatalf("New() returned unexpected error: %v", err)
