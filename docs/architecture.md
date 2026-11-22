@@ -8,7 +8,7 @@ The initial implementation deliberately starts small. The first vertical slice i
 
 `Client -> Edge Service -> Orders Service -> PostgreSQL`
 
-Additional services, asynchronous messaging, shared infrastructure modules, and Kubernetes deployment are deferred until the initial service boundaries and request flow are working and tested.
+The initial implementation includes HTTP routing, structured logging, W3C trace-context propagation through OpenTelemetry, and shared runtime infrastructure modules. PostgreSQL is available for local development and has an Orders migration, but the Orders API currently uses an in-memory repository. Asynchronous messaging and Kubernetes deployment remain deferred.
 
 ## Architecture Principles
 
@@ -35,6 +35,8 @@ Services communicate through explicit network or messaging contracts rather than
 A service owns the persistent data required by its domain. Other services do not access that database directly.
 
 The initial Orders service will own its PostgreSQL schema and persistence implementation.
+
+The current implementation uses an in-memory repository in-process. The PostgreSQL migration and Docker Compose service are local-development preparation; adding the PostgreSQL repository implementation is a separate persistence milestone.
 
 ### Explicit contracts
 
@@ -73,7 +75,7 @@ Responsibilities:
 
 ### PostgreSQL
 
-PostgreSQL is the persistent store owned by the Orders service in the first vertical slice.
+PostgreSQL is provisioned for the Orders service through local Compose configuration and is the intended persistent store. The schema migration is present, but the running Orders service still uses its in-memory repository.
 
 Only the Orders service accesses the Orders database directly.
 
@@ -83,7 +85,7 @@ Only the Orders service accesses the Orders database directly.
 2. The edge service applies boundary-level middleware and determines the destination route.
 3. The edge service forwards the request to the Orders service.
 4. The Orders service executes application and domain behavior.
-5. The Orders service reads or writes its PostgreSQL data as required.
+5. The Orders service reads or writes repository data (currently in-memory) as required.
 6. The response returns through the edge service to the client.
 
 Authentication will be added as a later milestone. Until then, the architecture preserves the location where authentication belongs without introducing a fake production identity solution.
@@ -103,20 +105,27 @@ Disallowed dependency direction:
 - Orders must not import the Edge implementation module.
 - One domain service must not import another domain service's implementation.
 - One service must not directly query another service's database.
+- Runtime service communication is over HTTP; test code may assemble both handlers in-process.
 
 ## Planned Repository Shape
 
     microservice-reference-platform/
     ├── services/
     │   ├── edge/
-    │   │   ├── main.go
+    │   │   ├── cmd/
     │   │   ├── internal/
     │   │   └── go.mod
     │   └── orders/
-    │       ├── main.go
+    │       ├── cmd/
+    │       ├── httpapi/
     │       ├── internal/
+    │       ├── migrations/
     │       └── go.mod
+    ├── shared/
+    │   ├── observability/
+    │   └── service/
     ├── deployments/
+    │   └── compose/
     ├── docs/
     │   └── decisions/
     ├── tests/
@@ -137,16 +146,17 @@ The following capabilities are intentionally outside the initial vertical slice:
 - transactional outbox;
 - inventory processing;
 - catalog service;
-- shared observability module;
 - Kubernetes manifests;
 - production secret management;
-- distributed tracing; and
+- persistent PostgreSQL-backed Orders storage; and
 - load and resilience testing.
+
+The platform does have distributed trace propagation and OTLP export implemented through OpenTelemetry, but it does not include a collector or tracing backend in local Compose configuration.
 
 They will be introduced through separate architecture decisions and commit-sized changes when the project reaches those milestones.
 
 ## Architecture Decisions
 
 - [ADR-0001: Use Multiple Go Modules](decisions/0001-use-multiple-go-modules.md)
-- [ADR-0002: Use a Thin Edge Service](decisions/0002-use-an-edge-service.md)
 - [ADR-0003: Use Service-Owned Data](decisions/0003-use-service-owned-data.md)
+- [ADR-0004: Use W3C Trace Context](decisions/0004-use-w3c-trace-context.md)

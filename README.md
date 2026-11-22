@@ -19,11 +19,38 @@ Client -> Edge Service -> Orders Service -> PostgreSQL
 
 ## Repository structure
 
-The service and documentation structure will be introduced incrementally as the project develops.
+- `services/edge` - HTTP edge, reverse proxy, health/readiness, and tracing
+- `services/orders` - Orders HTTP API, domain/application code, and in-memory repository
+- `shared/service` - shared logging and HTTP server lifecycle
+- `shared/observability` - OpenTelemetry setup and OTLP export
+- `deployments/compose` - local PostgreSQL for development
+- `docs` - architecture and architecture decision records
+- `go.work` - local Go workspace
 
 ## Development
 
-Development prerequisites and commands will be added as the first Go modules are introduced.
+Copy `.env.example` to `.env`, then start the local PostgreSQL container:
+
+```sh
+docker compose -f deployments/compose/compose.yaml up -d
+```
+
+Run the services in separate terminals:
+
+```sh
+make run-edge
+make run-orders
+```
+
+Edge defaults to `:8080`, Orders defaults to `:8081`, and `ORDERS_URL` must point to the Orders service.
+
+Run formatting, license, build, test, and vet checks with:
+
+```sh
+make pre-commit
+```
+
+The Orders API is currently backed by an in-memory repository. PostgreSQL migrations are prepared in `services/orders/migrations/`; the running service is not yet wired to PostgreSQL.
 
 ## License
 

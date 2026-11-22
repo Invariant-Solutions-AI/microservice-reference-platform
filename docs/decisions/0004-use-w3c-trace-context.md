@@ -41,7 +41,7 @@ The Edge service is the first platform boundary responsible for participating in
 
 Downstream services will participate in the same trace context when processing requests.
 
-Application logging and future distributed tracing instrumentation should obtain correlation information from the active trace context rather than establishing an independent correlation identifier.
+Application logging and distributed tracing instrumentation obtain correlation information from the active trace context rather than establishing an independent correlation identifier.
 
 The application will not implement its own W3C Trace Context parser when supported instrumentation or tracing libraries can manage propagation correctly.
 
@@ -208,6 +208,8 @@ The reference platform instead prioritizes standardized cross-platform trace pro
 
 The implementation will be introduced incrementally.
 
+The propagation and logging phases are active in the current codebase.
+
 ### Phase 1: Trace Context Propagation
 
 Add HTTP middleware and propagation support at the Edge boundary.
@@ -216,13 +218,19 @@ Verify that trace context survives:
 
 `Client -> Edge -> Orders`
 
+The shared HTTP server wraps handlers with `otelhttp.NewHandler`, and the Edge reverse proxy uses `otelhttp.NewTransport`; both participate in the same active trace context.
+
 ### Phase 2: Structured Logging
 
 Include active trace identifiers in structured request logs.
 
+The JSON logger adds `trace_id` and `span_id` attributes when an active span context exists.
+
 ### Phase 3: Distributed Tracing
 
 Introduce tracing instrumentation and spans while continuing to use the same W3C trace context.
+
+An OTLP HTTP trace exporter and OpenTelemetry resource setup are implemented in `shared/observability`. The exporter endpoint is configured by the standard OTEL environment variables.
 
 ### Phase 4: Asynchronous Propagation
 

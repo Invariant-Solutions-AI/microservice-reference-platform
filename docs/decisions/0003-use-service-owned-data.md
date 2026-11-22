@@ -1,4 +1,4 @@
-# ADR-0001: Use Multiple Go Modules
+# ADR-0003: Use Service-Owned Data
 
 ## Status
 
@@ -6,35 +6,44 @@ Accepted
 
 ## Context
 
-The repository contains multiple independently deployable services. Treating the entire repository as one Go module would make it easier for one service to import another service's implementation and would blur the intended deployment boundaries.
+The Orders domain needs persistent state, while the Edge service must remain independent of Orders business data and implementation. Direct database access from a second service would couple deployment, scaling, and schema evolution.
 
-The project also needs a convenient local-development experience while multiple modules are being changed together.
+The current implementation is still completing the persistence milestone, so production storage is not yet interchangeable with the initial in-memory repository.
 
 ## Decision
 
-Each independently deployable Go service will have its own `go.mod` file.
+Each domain service owns the persistent data used by its domain. No other service will read or write that data directly.
 
-A root `go.work` file will compose the local modules into a development workspace as those modules are introduced.
+The Orders service owns its data model, persistence implementation, schema, and migrations. The other services communicate with Orders through HTTP contracts.
 
-Service implementations will not import other service implementation modules. Communication between services will occur through explicit network or messaging contracts.
+The in-memory implementation is a valid initial repository implementation, but it must implement the Orders domain repository interface rather than become a dependency of HTTP or domain layers.
+
+## Current Implementation
+
+- `services/orders/internal/persistence/memory` provides a thread-safe in-process repository.
+- `services/orders/internal/domain/order.Repository` defines the persistence boundary.
+- `services/orders/migrations/000001_create_orders.sql` defines the PostgreSQL schema.
+- `deployments/compose/compose.yaml` starts PostgreSQL for local development.
+- The running Orders API does not yet use a PostgreSQL repository.
+
+Local PostgreSQL configuration is in `.env.example`; migrations can be applied with Goose.
 
 ## Consequences
 
 ### Positive
 
-- Module boundaries reinforce deployment boundaries.
-- Each service declares only the dependencies it requires.
-- Services can evolve without a repository-wide application dependency graph.
-- Local development can work across modules through the workspace.
+- Domain code remains independent of database technology.
+- Orders can move from memory to PostgreSQL without changing HTTP handlers or application use cases.
+- Database ownership and schema evolution remain with Orders.
 
 ### Negative
 
-- Dependency management is performed in more than one `go.mod` file.
-- Repository-wide build and maintenance commands need to account for multiple modules.
-- Shared code requires an intentional decision about whether it deserves a separate module.
+- Data is lost when the Orders process restarts until PostgreSQL persistence is wired.
+- Migration and deployment coordination are required before production use.
 
 ## Guardrails
 
-- Do not add a service implementation module to another service's `require` list.
-- Do not create a shared module merely to remove small amounts of duplication.
-- Add modules to `go.work` only when those modules actually exist.
+- The Edge service must not access the Orders database.
+- The Orders repository interface must remain owned by the Orders domain.
+- PostgreSQL-specific code must live behind that repository interface.
+- Schema changes require a reviewed migration.
