@@ -11,29 +11,31 @@ import (
 
 func TestHealthEndpoints(t *testing.T) {
 	tests := []struct {
-		name    string
-		handler http.HandlerFunc
+		name string
+		path string
 	}{
 		{
-			name:    "health",
-			handler: health,
+			name: "health",
+			path: "/health",
 		},
 		{
-			name:    "ready",
-			handler: ready,
+			name: "ready",
+			path: "/ready",
 		},
 	}
+
+	handler := NewHandler(nil, nil)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(
 				http.MethodGet,
-				"/",
+				tt.path,
 				nil,
 			)
 			rec := httptest.NewRecorder()
 
-			tt.handler(rec, req)
+			handler.ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusOK {
 				t.Errorf(

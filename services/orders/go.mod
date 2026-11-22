@@ -4,8 +4,7 @@ go 1.27.2
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/invariant-solutions-ai/microservice-reference-platform/shared/observability v0.0.0
-	github.com/joho/godotenv v1.5.1
+	github.com/invariant-solutions-ai/microservice-reference-platform/shared/service v0.0.0
 )
 
 require (
@@ -14,6 +13,8 @@ require (
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
+	github.com/invariant-solutions-ai/microservice-reference-platform/shared/observability v0.0.0 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0 // indirect
@@ -33,3 +34,5 @@ require (
 )
 
 replace github.com/invariant-solutions-ai/microservice-reference-platform/shared/observability => ../../shared/observability
+
+replace github.com/invariant-solutions-ai/microservice-reference-platform/shared/service => ../../shared/service

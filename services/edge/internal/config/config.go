@@ -5,8 +5,11 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
+
+	"github.com/invariant-solutions-ai/microservice-reference-platform/shared/service"
 )
 
 const defaultEdgePort = ":8080"
@@ -14,6 +17,7 @@ const defaultEdgePort = ":8080"
 type Config struct {
 	Addr      string
 	OrdersURL *url.URL
+	LogLevel  slog.Level
 }
 
 func Load() (Config, error) {
@@ -21,12 +25,14 @@ func Load() (Config, error) {
 	if addr == "" {
 		addr = defaultEdgePort
 	}
+	slog.Debug("EDGE_ADDR", "value", addr)
 	value := os.Getenv("ORDERS_URL")
 	if value == "" {
 		return Config{}, fmt.Errorf(
 			"ORDERS_URL is required",
 		)
 	}
+	slog.Debug("ORDERS_URL", "value", value)
 
 	ordersURL, err := url.Parse(value)
 	if err != nil {
@@ -35,7 +41,7 @@ func Load() (Config, error) {
 			err,
 		)
 	}
-
+	slog.Debug("Parsed ORDERS_URL", "value", ordersURL.String())
 	if ordersURL.Scheme == "" ||
 		ordersURL.Host == "" {
 		return Config{}, fmt.Errorf(
@@ -43,8 +49,12 @@ func Load() (Config, error) {
 		)
 	}
 
+	logLevel := service.ParseLogLevel(os.Getenv("LOG_LEVEL"))
+	slog.Debug("LOG_LEVEL", "value", logLevel)
+
 	return Config{
 		Addr:      addr,
 		OrdersURL: ordersURL,
+		LogLevel:  logLevel,
 	}, nil
 }
