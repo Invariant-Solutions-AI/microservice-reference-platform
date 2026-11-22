@@ -5,6 +5,8 @@ package order
 
 import (
 	"errors"
+	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -50,6 +52,38 @@ func TestNew(t *testing.T) {
 
 	if got.Items[0] != items[0] {
 		t.Errorf("Items[0] = %+v, want %+v", got.Items[0], items[0])
+	}
+}
+
+func TestQuantityRange(t *testing.T) {
+	tooLarge := int64(math.MaxInt32) + 1
+	tests := []struct {
+		name          string
+		quantity      int64
+		wantErr       error
+		wantRehydrate error
+	}{
+		{name: "maximum", quantity: 1000},
+		{name: "above maximum", quantity: 1001, wantErr: ErrInvalidQuantity},
+		{name: "previous maximum", quantity: math.MaxInt32, wantErr: ErrInvalidQuantity},
+		{name: "above database range", quantity: tooLarge, wantErr: ErrInvalidQuantity, wantRehydrate: ErrInvalidQuantity},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if strconv.IntSize == 32 && tt.quantity > math.MaxInt32 {
+				t.Skip("quantity cannot be represented as int on this platform")
+			}
+			items := []Item{{ProductID: uuid.New(), Quantity: int(tt.quantity)}}
+			id, customerID, now := uuid.New(), uuid.New(), time.Now()
+			_, err := New(id, customerID, items, now)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("New() error = %v, want %v", err, tt.wantErr)
+			}
+			_, err = Rehydrate(id, customerID, items, StatusPending, now)
+			if !errors.Is(err, tt.wantRehydrate) {
+				t.Errorf("Rehydrate() error = %v, want %v", err, tt.wantRehydrate)
+			}
+		})
 	}
 }
 

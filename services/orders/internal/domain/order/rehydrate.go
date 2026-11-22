@@ -5,6 +5,7 @@ package order
 
 import (
 	"errors"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,7 +38,8 @@ func Rehydrate(
 			return nil, ErrProductIDRequired
 		}
 
-		if item.Quantity <= 0 {
+		// Existing orders may predate the lower creation limit.
+		if item.Quantity <= 0 || item.Quantity > math.MaxInt32 {
 			return nil, ErrInvalidQuantity
 		}
 	}

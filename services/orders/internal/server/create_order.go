@@ -6,6 +6,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/application/orders"
@@ -18,7 +19,16 @@ func createOrder(
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request createOrderRequest
 
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&request); err != nil {
+			writeProblem(
+				w,
+				http.StatusBadRequest,
+				"invalid request body",
+			)
+			return
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
 			writeProblem(
 				w,
 				http.StatusBadRequest,

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/application/orders"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/domain/order"
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/persistence/memory"
 )
 
@@ -64,7 +66,7 @@ func TestCreateOrder(t *testing.T) {
 				"quantity": 2
 			}
 		]
-	}`)
+	}` + " \n\t")
 
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -208,6 +210,22 @@ func TestCreateOrderReturnsBadRequest(t *testing.T) {
 			body: `{`,
 		},
 		{
+			name: "trailing garbage",
+			body: `{"customerId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","items":[{"productId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","quantity":1}]} garbage`,
+		},
+		{
+			name: "second JSON value",
+			body: `{"customerId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","items":[{"productId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","quantity":1}]} null`,
+		},
+		{
+			name: "quantity exceeds limit",
+			body: `{"customerId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","items":[{"productId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","quantity":1001}]}`,
+		},
+		{
+			name: "quantity exceeds database range",
+			body: `{"customerId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","items":[{"productId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","quantity":2147483648}]}`,
+		},
+		{
 			name: "invalid customer ID",
 			body: `{
 				"customerId": "not-a-uuid",
@@ -254,10 +272,11 @@ func TestCreateOrderReturnsBadRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repository := memory.NewOrderRepository()
+			orderID := uuid.New()
 
 			createOrder := orders.NewCreateOrder(
 				repository,
-				uuid.New,
+				func() uuid.UUID { return orderID },
 				time.Now,
 			)
 
@@ -286,6 +305,9 @@ func TestCreateOrderReturnsBadRequest(t *testing.T) {
 					http.StatusBadRequest,
 					rec.Body.String(),
 				)
+			}
+			if _, err := repository.Get(context.Background(), orderID); !errors.Is(err, order.ErrOrderNotFound) {
+				t.Errorf("repository.Get() error = %v, want order not found", err)
 			}
 
 			if contentType := rec.Header().Get("Content-Type"); contentType != "application/problem+json" {

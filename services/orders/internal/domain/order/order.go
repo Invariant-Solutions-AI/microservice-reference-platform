@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const maxItemQuantity = 1000
+
 type Item struct {
 	ProductID uuid.UUID
 	Quantity  int
@@ -33,7 +35,7 @@ func New(id uuid.UUID, customerID uuid.UUID, items []Item, CreatedAt time.Time) 
 		if item.ProductID == uuid.Nil {
 			return nil, ErrProductIDRequired
 		}
-		if item.Quantity <= 0 {
+		if item.Quantity <= 0 || item.Quantity > maxItemQuantity {
 			return nil, ErrInvalidQuantity
 		}
 	}

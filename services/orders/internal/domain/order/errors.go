@@ -10,7 +10,7 @@ var (
 	ErrCustomerIDRequired = errors.New("customer ID is required")
 	ErrItemsRequired      = errors.New("order must contain at least one item")
 	ErrProductIDRequired  = errors.New("product ID is required")
-	ErrInvalidQuantity    = errors.New("item quantity must be greater than zero")
+	ErrInvalidQuantity    = errors.New("item quantity must be between 1 and 1000")
 	ErrInvalidOrderID     = errors.New("invalid order ID")
 )
 
