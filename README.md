@@ -64,6 +64,13 @@ the `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DATABASE`, `POSTGRES_USER`, and
 `POSTGRES_PASSWORD` settings. It returns 503 when PostgreSQL is unavailable.
 New orders allow a quantity of 1 to 1,000 per item.
 
+Orders defaults to PostgreSQL `sslmode=verify-full`, which verifies the server
+certificate and hostname. Configure trusted CA certificates via `PGSSLROOTCERT`
+when necessary. Local Compose and `.env.example` explicitly set
+`PGSSLMODE=disable` for the development-only PostgreSQL instance; add that
+setting to an existing local `.env` as needed. Do not disable TLS for remote
+databases.
+
 Run formatting, license, build, test, and vet checks with:
 
 ```sh

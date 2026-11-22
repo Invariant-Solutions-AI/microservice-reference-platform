@@ -42,12 +42,14 @@ func Load() (Config, error) {
 	port := envOrDefault("POSTGRES_PORT", "5432")
 	database := envOrDefault("POSTGRES_DATABASE", "orders")
 	user := envOrDefault("POSTGRES_USER", "orders")
+	params := url.Values{"sslmode": {envOrDefault("PGSSLMODE", "verify-full")}}
 	databaseURL := url.URL{
-		Scheme:  "postgres",
-		User:    url.UserPassword(user, os.Getenv("POSTGRES_PASSWORD")),
-		Host:    net.JoinHostPort(host, port),
-		Path:    "/" + database,
-		RawPath: "/" + url.PathEscape(database),
+		Scheme:   "postgres",
+		User:     url.UserPassword(user, os.Getenv("POSTGRES_PASSWORD")),
+		Host:     net.JoinHostPort(host, port),
+		Path:     "/" + database,
+		RawPath:  "/" + url.PathEscape(database),
+		RawQuery: params.Encode(),
 	}
 
 	return Config{

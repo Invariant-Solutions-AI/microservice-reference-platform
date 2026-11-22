@@ -29,6 +29,7 @@ services:
       POSTGRES_DATABASE: orders
       POSTGRES_USER: orders
       POSTGRES_PASSWORD: local-development-only
+      PGSSLMODE: disable
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     ports:
       - "127.0.0.1:${ORDERS_PORT:-8081}:8081"

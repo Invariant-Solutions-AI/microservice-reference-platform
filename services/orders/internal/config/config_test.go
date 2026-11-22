@@ -66,6 +66,7 @@ func TestLoadPostgresSettings(t *testing.T) {
 			t.Setenv("POSTGRES_DATABASE", tt.database)
 			t.Setenv("POSTGRES_USER", tt.user)
 			t.Setenv("POSTGRES_PASSWORD", tt.password)
+			t.Setenv("PGSSLMODE", "")
 			cfg, err := Load()
 			if err != nil {
 				t.Fatalf("Load() error = %v", err)
@@ -78,6 +79,24 @@ func TestLoadPostgresSettings(t *testing.T) {
 			if conn.Host != tt.wantHost || conn.Port != tt.wantPort || conn.Database != tt.wantDB || conn.User != tt.wantUser || conn.Password != tt.password {
 				t.Error("PostgreSQL connection settings do not match environment")
 			}
+			if conn.TLSConfig == nil || conn.TLSConfig.InsecureSkipVerify || conn.TLSConfig.ServerName != tt.wantHost || len(conn.Fallbacks) != 0 {
+				t.Error("default PostgreSQL connection must verify the server without a plaintext fallback")
+			}
 		})
+	}
+}
+
+func TestLoadPostgresTLSDisabledForLocalDevelopment(t *testing.T) {
+	t.Setenv("PGSSLMODE", "disable")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if poolConfig.ConnConfig.TLSConfig != nil || len(poolConfig.ConnConfig.Fallbacks) != 0 {
+		t.Fatal("expected PostgreSQL TLS to be disabled")
 	}
 }
