@@ -50,6 +50,11 @@ Run formatting, license, build, test, and vet checks with:
 make pre-commit
 ```
 
+PostgreSQL repository integration tests run when `ORDERS_TEST_DATABASE_URL` is set
+to a PostgreSQL connection string. The database user must be able to create and
+drop schemas; each test uses its own temporary schema and applies the Orders migration.
+Without the variable, these tests are skipped.
+
 The Orders API is currently backed by an in-memory repository. PostgreSQL migrations are prepared in `services/orders/migrations/`; the running service is not yet wired to PostgreSQL.
 
 ## License
