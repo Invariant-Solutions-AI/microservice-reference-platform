@@ -43,7 +43,7 @@ func TestEdgeToOrdersCreateAndRetrievePropagateTraceContext(t *testing.T) {
 	})
 
 	ordersServer := httptest.NewServer(otelhttp.NewHandler(
-		ordershttpapi.NewHandler(),
+		ordershttpapi.NewHandler(nil),
 		"orders",
 		otelhttp.WithTracerProvider(ordersProvider),
 	))

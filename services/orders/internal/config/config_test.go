@@ -6,6 +6,8 @@ package config
 import (
 	"log/slog"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestLoadServiceName(t *testing.T) {
@@ -39,5 +41,43 @@ func TestLoadDebugLogLevel(t *testing.T) {
 	}
 	if cfg.LogLevel != slog.LevelDebug {
 		t.Errorf("LogLevel = %v, want debug", cfg.LogLevel)
+	}
+}
+
+func TestLoadPostgresSettings(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		host     string
+		port     string
+		database string
+		user     string
+		password string
+		wantHost string
+		wantPort uint16
+		wantDB   string
+		wantUser string
+	}{
+		{name: "defaults", wantHost: "localhost", wantPort: 5432, wantDB: "orders", wantUser: "orders"},
+		{name: "configured", host: "::1", port: "5433", database: "orders/test", user: "orders@user", password: "p@ss:/word", wantHost: "::1", wantPort: 5433, wantDB: "orders/test", wantUser: "orders@user"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("POSTGRES_HOST", tt.host)
+			t.Setenv("POSTGRES_PORT", tt.port)
+			t.Setenv("POSTGRES_DATABASE", tt.database)
+			t.Setenv("POSTGRES_USER", tt.user)
+			t.Setenv("POSTGRES_PASSWORD", tt.password)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+			if err != nil {
+				t.Fatal("invalid database configuration")
+			}
+			conn := poolConfig.ConnConfig
+			if conn.Host != tt.wantHost || conn.Port != tt.wantPort || conn.Database != tt.wantDB || conn.User != tt.wantUser || conn.Password != tt.password {
+				t.Error("PostgreSQL connection settings do not match environment")
+			}
+		})
 	}
 }

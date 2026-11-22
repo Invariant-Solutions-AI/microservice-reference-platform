@@ -43,6 +43,9 @@ make run-orders
 ```
 
 Edge defaults to `:8080`, Orders defaults to `:8081`, and `ORDERS_URL` must point to the Orders service.
+Orders `/health` reports liveness; `/ready` checks PostgreSQL connectivity using
+the `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DATABASE`, `POSTGRES_USER`, and
+`POSTGRES_PASSWORD` settings. It returns 503 when PostgreSQL is unavailable.
 
 Run formatting, license, build, test, and vet checks with:
 

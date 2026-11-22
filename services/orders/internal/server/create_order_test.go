@@ -54,7 +54,7 @@ func TestCreateOrder(t *testing.T) {
 
 	getOrder := orders.NewGetOrder(repository)
 
-	handler := NewHandler(createOrder, getOrder)
+	handler := NewHandler(createOrder, getOrder, nil)
 
 	body := []byte(`{
 		"customerId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -263,7 +263,7 @@ func TestCreateOrderReturnsBadRequest(t *testing.T) {
 
 			getOrder := orders.NewGetOrder(repository)
 
-			handler := NewHandler(createOrder, getOrder)
+			handler := NewHandler(createOrder, getOrder, nil)
 
 			req := httptest.NewRequest(
 				http.MethodPost,

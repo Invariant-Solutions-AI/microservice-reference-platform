@@ -4,6 +4,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -13,9 +14,9 @@ import (
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/server"
 )
 
-func NewHandler() http.Handler {
+func NewHandler(ping func(context.Context) error) http.Handler {
 	repository := memory.NewOrderRepository()
 	createOrder := orders.NewCreateOrder(repository, uuid.New, time.Now)
 	getOrder := orders.NewGetOrder(repository)
-	return server.NewHandler(createOrder, getOrder)
+	return server.NewHandler(createOrder, getOrder, ping)
 }

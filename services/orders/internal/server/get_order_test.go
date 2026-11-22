@@ -71,6 +71,7 @@ func TestGetOrder(t *testing.T) {
 	handler := NewHandler(
 		createOrder,
 		getOrder,
+		nil,
 	)
 
 	req := httptest.NewRequest(
@@ -175,6 +176,7 @@ func TestGetOrderReturnsBadRequestForInvalidOrderID(t *testing.T) {
 	handler := NewHandler(
 		createOrder,
 		getOrder,
+		nil,
 	)
 
 	req := httptest.NewRequest(
@@ -217,6 +219,7 @@ func TestGetOrderReturnsNotFound(t *testing.T) {
 	handler := NewHandler(
 		createOrder,
 		getOrder,
+		nil,
 	)
 
 	orderID := uuid.MustParse(

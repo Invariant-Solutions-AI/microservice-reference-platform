@@ -5,6 +5,8 @@ package config
 
 import (
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
 
 	"github.com/invariant-solutions-ai/microservice-reference-platform/shared/service"
@@ -19,6 +21,7 @@ type Config struct {
 	ServiceName string
 	Addr        string
 	LogLevel    slog.Level
+	DatabaseURL string
 }
 
 func Load() (Config, error) {
@@ -35,9 +38,29 @@ func Load() (Config, error) {
 	logLevel := service.ParseLogLevel(os.Getenv("LOG_LEVEL"))
 	slog.Debug("LOG_LEVEL", "value", logLevel)
 
+	host := envOrDefault("POSTGRES_HOST", "localhost")
+	port := envOrDefault("POSTGRES_PORT", "5432")
+	database := envOrDefault("POSTGRES_DATABASE", "orders")
+	user := envOrDefault("POSTGRES_USER", "orders")
+	databaseURL := url.URL{
+		Scheme:  "postgres",
+		User:    url.UserPassword(user, os.Getenv("POSTGRES_PASSWORD")),
+		Host:    net.JoinHostPort(host, port),
+		Path:    "/" + database,
+		RawPath: "/" + url.PathEscape(database),
+	}
+
 	return Config{
 		ServiceName: serviceName,
 		Addr:        addr,
 		LogLevel:    logLevel,
+		DatabaseURL: databaseURL.String(),
 	}, nil
+}
+
+func envOrDefault(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
 }
