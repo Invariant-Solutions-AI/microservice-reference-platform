@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -16,16 +17,62 @@ import (
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/application/orders"
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/persistence/memory"
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/server"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/shared/observability"
 	"github.com/joho/godotenv"
 )
 
+const (
+	serviceName       = "orders"
+	defaultAddr       = ":8081"
+	shutdownTimeout   = 10 * time.Second
+	readHeaderTimeout = 5 * time.Second
+)
+
 func main() {
+	if err := run(); err != nil {
+		log.Fatalf("Application error: %s", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
 	// read configuration
 	if err := godotenv.Load(); err != nil {
 		log.Println(".env file not loaded")
 	}
 
 	addr := os.Getenv("ORDERS_ADDR")
+	if addr == "" {
+		addr = defaultAddr
+	}
+
+	shutdownTelemetry, err := observability.Setup(
+		ctx,
+		serviceName,
+	)
+	if err != nil {
+		log.Printf("Error setting up telemetry: %s", err)
+		return err
+	}
+
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(
+			context.Background(),
+			shutdownTimeout,
+		)
+		defer cancel()
+
+		if err := shutdownTelemetry(shutdownCtx); err != nil {
+			log.Printf("Error shutting down telemetry: %s", err)
+		}
+	}()
 
 	// Infrastructure
 	repository := memory.NewOrderRepository()
@@ -47,28 +94,42 @@ func main() {
 	s := &http.Server{
 		Addr:           addr,
 		Handler:        handler,
-		ReadTimeout:    5 * time.Second,
-		WriteTimeout:   10 * time.Second,
+		ReadTimeout:    readHeaderTimeout,
+		WriteTimeout:   shutdownTimeout,
 		MaxHeaderBytes: 1 << 20, // 1 MB
 	}
 
+	serverErrors := make(chan error, 1)
+
 	// start order service
 	go func() {
-		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
-		}
+		serverErrors <- s.ListenAndServe()
 	}()
 
-	// wait for termination signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
-
-	// gracefully shutdown order service
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := s.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %s", err)
+	select {
+	case err := <-serverErrors:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		stop()
 	}
-	log.Println("Server exiting")
+
+	shutdownCtx, cancel := context.WithTimeout(
+		context.Background(),
+		shutdownTimeout,
+	)
+	defer cancel()
+
+	if err := s.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Error shutting down server: %s", err)
+	}
+
+	err = <-serverErrors
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+
+	return nil
 }
