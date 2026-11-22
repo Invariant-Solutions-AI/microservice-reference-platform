@@ -17,6 +17,25 @@ Thank you for your interest in the project.
 Install Go, Git, PowerShell (`pwsh`), and GNU Make, and ensure they are available
 on `PATH`. On Windows, Git for Windows also provides the shell used by the hook.
 
+## Install Goose
+
+Install the Goose database migration CLI with Go:
+
+```sh
+go install github.com/pressly/goose/v3/cmd/goose@latest
+goose -version
+```
+
+Ensure Go's executable directory (`$(go env GOBIN)`, or `$(go env GOPATH)/bin`
+when `GOBIN` is unset) is on `PATH`.
+
+To apply the Orders migrations using the local PostgreSQL settings from
+`.env.example`, run:
+
+```sh
+goose -dir services/orders/migrations postgres "host=localhost port=5432 user=orders password=local-development-only dbname=orders sslmode=disable" up
+```
+
 On Windows, first install [Chocolatey](https://chocolatey.org/install) if
 `choco` is not already available:
 
