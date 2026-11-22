@@ -12,9 +12,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/edge/internal/config"
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/edge/internal/server"
 	"github.com/joho/godotenv"
 )
+
+const shutdownTimeout = 10 * time.Second
 
 func main() {
 	// read configuration
@@ -22,34 +25,43 @@ func main() {
 		log.Println(".env file not loaded")
 	}
 
-	addr := os.Getenv("EDGE_ADDR")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("failed to load config: %s", err)
+		os.Exit(1)
+	}
+
+	handler := server.NewHandler(cfg.OrdersURL)
 
 	// initialize edge service
 	s := &http.Server{
-		Addr:           addr,
-		Handler:        server.NewHandler(),
+		Addr:           cfg.Addr,
+		Handler:        handler,
 		ReadTimeout:    5 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20, // 1 MB
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// start edge service
 	go func() {
 		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %s\n", err)
+			os.Exit(1)
 		}
 	}()
 
-	// wait for termination signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
+	<-ctx.Done()
 
 	// gracefully shutdown edge service
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := s.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %s", err)
+		os.Exit(1)
 	}
+
 	log.Println("Server exiting")
 }

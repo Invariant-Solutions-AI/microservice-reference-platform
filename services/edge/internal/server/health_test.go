@@ -6,6 +6,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 )
 
@@ -24,7 +25,7 @@ func TestHealthEndpoints(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler()
+	handler := NewHandler(&url.URL{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

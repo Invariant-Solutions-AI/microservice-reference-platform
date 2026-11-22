@@ -5,7 +5,20 @@ package server
 
 import "net/http"
 
-func registerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/health", health)
-	mux.HandleFunc("/ready", ready)
+func registerRoutes(
+	mux *http.ServeMux,
+	orders http.Handler,
+) {
+	mux.HandleFunc("GET /health", health)
+	mux.HandleFunc("GET /ready", ready)
+
+	mux.Handle(
+		"POST /api/v1/orders",
+		orders,
+	)
+
+	mux.Handle(
+		"GET /api/v1/orders/{orderId}",
+		orders,
+	)
 }

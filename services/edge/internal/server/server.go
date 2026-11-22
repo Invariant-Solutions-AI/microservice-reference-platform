@@ -3,13 +3,23 @@
 
 package server
 
-import "net/http"
+import (
+	"net/http"
+	"net/url"
+
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/edge/internal/routing"
+)
 
 // create the HTTP handler for the edge service
-func NewHandler() http.Handler {
+func NewHandler(ordersURL *url.URL) http.Handler {
 	mux := http.NewServeMux()
+
+	proxy := routing.NewReverseProxy(ordersURL)
+
+	orders := routing.Orders(proxy)
+
 	// define your routes
-	registerRoutes(mux)
+	registerRoutes(mux, orders)
 
 	return mux
 }
