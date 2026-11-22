@@ -88,8 +88,13 @@ func logRequests(next http.Handler) http.Handler {
 		})
 		next.ServeHTTP(wrapped, r)
 		setOK()
+		route := r.Pattern
+		if route == "" {
+			route = r.URL.Path
+		}
 		slog.InfoContext(r.Context(), "HTTP request completed",
 			"method", r.Method,
+			"route", route,
 			"status", status,
 			"duration_ms", float64(time.Since(start))/float64(time.Millisecond),
 		)

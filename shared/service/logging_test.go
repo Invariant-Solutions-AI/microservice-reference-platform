@@ -239,24 +239,26 @@ func TestLoggerMinimumLevel(t *testing.T) {
 
 func TestRequestCompletionStatus(t *testing.T) {
 	for _, tt := range []struct {
-		name    string
-		handler http.HandlerFunc
-		status  int
+		name      string
+		handler   http.HandlerFunc
+		status    int
+		pattern   string
+		wantRoute string
 	}{
 		{name: "explicit", handler: func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
-		}, status: http.StatusBadRequest},
+		}, status: http.StatusBadRequest, pattern: "/orders/{id}", wantRoute: "/orders/{id}"},
 		{name: "implicit write", handler: func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte("ok"))
-		}, status: http.StatusOK},
-		{name: "empty response", handler: func(http.ResponseWriter, *http.Request) {}, status: http.StatusOK},
+		}, status: http.StatusOK, wantRoute: "/"},
+		{name: "empty response", handler: func(http.ResponseWriter, *http.Request) {}, status: http.StatusOK, wantRoute: "/"},
 		{name: "flush", handler: func(w http.ResponseWriter, _ *http.Request) {
 			w.(http.Flusher).Flush()
-		}, status: http.StatusOK},
+		}, status: http.StatusOK, wantRoute: "/"},
 		{name: "first final status", handler: func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusCreated)
 			w.WriteHeader(http.StatusInternalServerError)
-		}, status: http.StatusCreated},
+		}, status: http.StatusCreated, wantRoute: "/"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var output bytes.Buffer
@@ -266,7 +268,9 @@ func TestRequestCompletionStatus(t *testing.T) {
 			t.Cleanup(func() { slog.SetDefault(previousLogger) })
 
 			rec := httptest.NewRecorder()
-			logRequests(tt.handler).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Pattern = tt.pattern
+			logRequests(tt.handler).ServeHTTP(rec, req)
 			var record map[string]any
 			if err := json.Unmarshal(output.Bytes(), &record); err != nil {
 				t.Fatal(err)
@@ -279,6 +283,9 @@ func TestRequestCompletionStatus(t *testing.T) {
 			}
 			if record["method"] != http.MethodGet || record["msg"] != "HTTP request completed" {
 				t.Errorf("unexpected completion log = %v", record)
+			}
+			if record["route"] != tt.wantRoute {
+				t.Errorf("route = %v, want %q", record["route"], tt.wantRoute)
 			}
 			if _, ok := record["trace_id"]; ok {
 				t.Errorf("unexpected trace_id in untraced log: %v", record)
