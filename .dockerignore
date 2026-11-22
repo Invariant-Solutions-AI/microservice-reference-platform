@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+.vscode
+.idea
+main.exe
+**/*.test
+**/*_test.go
+**/coverage.out
+docs
+deployments
