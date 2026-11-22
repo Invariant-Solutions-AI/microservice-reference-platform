@@ -4,12 +4,16 @@
 package server
 
 import (
-	"context"
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
+	"github.com/google/uuid"
+	ordershttpapi "github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/httpapi"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -21,115 +25,219 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func TestOrdersRequestPropagatesTraceContext(t *testing.T) {
+func TestEdgeToOrdersCreateAndRetrievePropagateTraceContext(t *testing.T) {
 	previousProvider := otel.GetTracerProvider()
 	previousPropagator := otel.GetTextMapPropagator()
 
 	edgeExporter := tracetest.NewInMemoryExporter()
 	edgeProvider := newTestTracerProvider(t, edgeExporter, "edge")
-	otel.SetTracerProvider(edgeProvider)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
 	ordersExporter := tracetest.NewInMemoryExporter()
 	ordersProvider := newTestTracerProvider(t, ordersExporter, "orders")
+	otel.SetTracerProvider(edgeProvider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 	t.Cleanup(func() {
-		_ = edgeProvider.Shutdown(t.Context())
-		_ = ordersProvider.Shutdown(t.Context())
 		otel.SetTracerProvider(previousProvider)
 		otel.SetTextMapPropagator(previousPropagator)
+		_ = edgeProvider.Shutdown(t.Context())
+		_ = ordersProvider.Shutdown(t.Context())
 	})
-	var ordersSpanContext trace.SpanContext
-	var ordersTraceparent string
-	ordersHandler := otelhttp.NewHandler(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ordersSpanContext = trace.SpanFromContext(r.Context()).SpanContext()
-			ordersTraceparent = r.Header.Get("traceparent")
-			w.WriteHeader(http.StatusCreated)
-		}),
+
+	ordersServer := httptest.NewServer(otelhttp.NewHandler(
+		ordershttpapi.NewHandler(),
 		"orders",
 		otelhttp.WithTracerProvider(ordersProvider),
-	)
-	ordersServer := httptest.NewServer(ordersHandler)
+	))
 	t.Cleanup(ordersServer.Close)
 
-	target, err := url.Parse(ordersServer.URL)
+	ordersURL, err := url.Parse(ordersServer.URL)
 	if err != nil {
 		t.Fatalf("url.Parse() error = %v", err)
 	}
 
-	handler := otelhttp.NewHandler(NewHandler(target), "edge")
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders", http.NoBody)
-	req.Header.Set("traceparent", "00-11111111111111111111111111111111-2222222222222222-01")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	edgeServer := httptest.NewServer(otelhttp.NewHandler(
+		NewHandler(ordersURL),
+		"edge",
+		otelhttp.WithTracerProvider(edgeProvider),
+	))
+	t.Cleanup(edgeServer.Close)
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	customerID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	productID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	createTraceID := "11111111111111111111111111111111"
+	createParentID := "2222222222222222"
+	createBody := []byte(fmt.Sprintf(`{
+		"customerId": %q,
+		"items": [{"productId": %q, "quantity": 2}]
+	}`, customerID, productID))
+
+	createRequest, err := http.NewRequest(
+		http.MethodPost,
+		edgeServer.URL+"/api/v1/orders",
+		bytes.NewReader(createBody),
+	)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
 	}
-	if !ordersSpanContext.IsValid() {
-		t.Fatal("Orders request did not create a valid server span")
+	createRequest.Header.Set("Content-Type", "application/json")
+	createRequest.Header.Set("traceparent", "00-"+createTraceID+"-"+createParentID+"-01")
+
+	createResponse, err := edgeServer.Client().Do(createRequest)
+	if err != nil {
+		t.Fatalf("create order request error = %v", err)
+	}
+	defer createResponse.Body.Close()
+	if createResponse.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d", createResponse.StatusCode, http.StatusCreated)
 	}
 
-	edgeSpans := edgeExporter.GetSpans()
+	var created integrationOrderResponse
+	if err := json.NewDecoder(createResponse.Body).Decode(&created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if created.OrderID == uuid.Nil {
+		t.Fatal("create response orderId is nil")
+	}
+	if created.CustomerID != customerID {
+		t.Errorf("create customerId = %s, want %s", created.CustomerID, customerID)
+	}
+	if len(created.Items) != 1 {
+		t.Fatalf("create items = %d, want 1", len(created.Items))
+	}
+	if created.Items[0].ProductID != productID {
+		t.Errorf("create productId = %s, want %s", created.Items[0].ProductID, productID)
+	}
+	if created.Items[0].Quantity != 2 {
+		t.Errorf("create quantity = %d, want 2", created.Items[0].Quantity)
+	}
+
+	retrieveTraceID := "33333333333333333333333333333333"
+	retrieveParentID := "4444444444444444"
+	retrieveRequest, err := http.NewRequest(
+		http.MethodGet,
+		edgeServer.URL+"/api/v1/orders/"+created.OrderID.String(),
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+	retrieveRequest.Header.Set("traceparent", "00-"+retrieveTraceID+"-"+retrieveParentID+"-01")
+
+	retrieveResponse, err := edgeServer.Client().Do(retrieveRequest)
+	if err != nil {
+		t.Fatalf("retrieve order request error = %v", err)
+	}
+	defer retrieveResponse.Body.Close()
+	if retrieveResponse.StatusCode != http.StatusOK {
+		t.Fatalf("retrieve status = %d, want %d", retrieveResponse.StatusCode, http.StatusOK)
+	}
+
+	var retrieved integrationOrderResponse
+	if err := json.NewDecoder(retrieveResponse.Body).Decode(&retrieved); err != nil {
+		t.Fatalf("decode retrieve response: %v", err)
+	}
+	if retrieved.OrderID != created.OrderID {
+		t.Errorf("retrieve orderId = %s, want %s", retrieved.OrderID, created.OrderID)
+	}
+	if retrieved.CustomerID != customerID {
+		t.Errorf("retrieve customerId = %s, want %s", retrieved.CustomerID, customerID)
+	}
+	if len(retrieved.Items) != 1 {
+		t.Fatalf("retrieve items = %d, want 1", len(retrieved.Items))
+	}
+	if retrieved.Items[0].ProductID != productID {
+		t.Errorf("retrieve productId = %s, want %s", retrieved.Items[0].ProductID, productID)
+	}
+	if retrieved.Items[0].Quantity != 2 {
+		t.Errorf("retrieve quantity = %d, want 2", retrieved.Items[0].Quantity)
+	}
+
+	assertTraceFlow(t, edgeExporter.GetSpans(), ordersExporter.GetSpans(), createTraceID, createParentID)
+	assertTraceFlow(t, edgeExporter.GetSpans(), ordersExporter.GetSpans(), retrieveTraceID, retrieveParentID)
+}
+
+type integrationOrderResponse struct {
+	OrderID    uuid.UUID `json:"orderId"`
+	CustomerID uuid.UUID `json:"customerId"`
+	Items      []struct {
+		ProductID uuid.UUID `json:"productId"`
+		Quantity  int       `json:"quantity"`
+	} `json:"items"`
+}
+
+func assertTraceFlow(
+	t *testing.T,
+	edgeSpans []tracetest.SpanStub,
+	ordersSpans []tracetest.SpanStub,
+	traceIDHex string,
+	rootParentIDHex string,
+) {
+	t.Helper()
+
+	wantTraceID, err := trace.TraceIDFromHex(traceIDHex)
+	if err != nil {
+		t.Fatalf("trace.TraceIDFromHex() error = %v", err)
+	}
+	wantRootParentID, err := trace.SpanIDFromHex(rootParentIDHex)
+	if err != nil {
+		t.Fatalf("trace.SpanIDFromHex() error = %v", err)
+	}
+
 	var edgeServerSpan, edgeClientSpan *tracetest.SpanStub
+	edgeTraceSpanCount := 0
 	for i := range edgeSpans {
 		span := &edgeSpans[i]
-		if span.SpanKind == trace.SpanKindServer {
-			edgeServerSpan = span
+		if span.SpanContext.TraceID() != wantTraceID {
+			continue
 		}
-		if span.SpanKind == trace.SpanKindClient {
+		edgeTraceSpanCount++
+		switch span.SpanKind {
+		case trace.SpanKindServer:
+			edgeServerSpan = span
+		case trace.SpanKindClient:
 			edgeClientSpan = span
 		}
 	}
+	if edgeTraceSpanCount != 2 {
+		t.Errorf("Edge spans for trace %s = %d, want 2", wantTraceID, edgeTraceSpanCount)
+	}
 	if edgeServerSpan == nil || edgeClientSpan == nil {
-		t.Fatalf("edge spans = %#v, want inbound server and outbound client spans", edgeSpans)
+		t.Fatalf("Edge spans = %#v, want inbound server and outbound client spans for %s", edgeSpans, wantTraceID)
 	}
-
-	wantTraceID, _ := trace.TraceIDFromHex("11111111111111111111111111111111")
-	wantParentID, _ := trace.SpanIDFromHex("2222222222222222")
-	if edgeServerSpan.SpanContext.TraceID() != wantTraceID {
-		t.Errorf("edge trace ID = %s, want %s", edgeServerSpan.SpanContext.TraceID(), wantTraceID)
+	if edgeServerSpan.Parent.SpanID() != wantRootParentID {
+		t.Errorf("Edge server parent = %s, want incoming parent %s", edgeServerSpan.Parent.SpanID(), wantRootParentID)
 	}
-	if edgeServerSpan.Parent.SpanID() != wantParentID {
-		t.Errorf("edge parent span ID = %s, want %s", edgeServerSpan.Parent.SpanID(), wantParentID)
-	}
-	if edgeClientSpan.SpanContext.TraceID() != wantTraceID {
-		t.Errorf("edge client trace ID = %s, want %s", edgeClientSpan.SpanContext.TraceID(), wantTraceID)
+	if edgeServerSpan.SpanContext.TraceID() != edgeClientSpan.SpanContext.TraceID() {
+		t.Errorf("Edge server and client trace IDs differ: %s and %s", edgeServerSpan.SpanContext.TraceID(), edgeClientSpan.SpanContext.TraceID())
 	}
 	if edgeClientSpan.Parent.SpanID() != edgeServerSpan.SpanContext.SpanID() {
-		t.Errorf("edge client parent = %s, want edge server span %s", edgeClientSpan.Parent.SpanID(), edgeServerSpan.SpanContext.SpanID())
-	}
-	if ordersSpanContext.TraceID() != wantTraceID {
-		t.Errorf("Orders trace ID = %s, want %s", ordersSpanContext.TraceID(), wantTraceID)
-	}
-	if ordersSpanContext.TraceID() != edgeClientSpan.SpanContext.TraceID() {
-		t.Errorf("Orders trace ID = %s, want edge client trace ID %s", ordersSpanContext.TraceID(), edgeClientSpan.SpanContext.TraceID())
-	}
-	injectedHeader := make(http.Header)
-	injectedHeader.Set("traceparent", ordersTraceparent)
-	injectedContext := propagation.TraceContext{}.Extract(
-		context.Background(),
-		propagation.HeaderCarrier(injectedHeader),
-	)
-	injectedSpanContext := trace.SpanContextFromContext(injectedContext)
-	if !injectedSpanContext.IsValid() {
-		t.Fatal("Orders request did not receive a valid traceparent header")
-	}
-	if injectedSpanContext.TraceID() != wantTraceID {
-		t.Errorf("injected trace ID = %s, want %s", injectedSpanContext.TraceID(), wantTraceID)
-	}
-	if injectedSpanContext.SpanID() != edgeClientSpan.SpanContext.SpanID() {
-		t.Errorf("injected parent span ID = %s, want edge client span %s", injectedSpanContext.SpanID(), edgeClientSpan.SpanContext.SpanID())
+		t.Errorf("Edge client parent = %s, want Edge server span %s", edgeClientSpan.Parent.SpanID(), edgeServerSpan.SpanContext.SpanID())
 	}
 
-	ordersSpans := ordersExporter.GetSpans()
-	if len(ordersSpans) != 1 {
-		t.Fatalf("Orders spans = %d, want 1", len(ordersSpans))
+	var ordersSpan *tracetest.SpanStub
+	ordersTraceSpanCount := 0
+	for i := range ordersSpans {
+		span := &ordersSpans[i]
+		if span.SpanContext.TraceID() == wantTraceID {
+			ordersTraceSpanCount++
+			ordersSpan = span
+		}
 	}
-	if ordersSpans[0].Parent.SpanID() != edgeClientSpan.SpanContext.SpanID() {
-		t.Errorf("Orders parent span ID = %s, want edge client span %s", ordersSpans[0].Parent.SpanID(), edgeClientSpan.SpanContext.SpanID())
+	if ordersTraceSpanCount != 1 {
+		t.Errorf("Orders spans for trace %s = %d, want 1", wantTraceID, ordersTraceSpanCount)
 	}
-	if serviceName := resourceServiceName(ordersSpans[0].Resource); serviceName != "orders" {
+	if ordersSpan == nil {
+		t.Fatalf("Orders spans = %#v, want a span for trace %s", ordersSpans, wantTraceID)
+	}
+	if ordersSpan.SpanKind != trace.SpanKindServer {
+		t.Errorf("Orders span kind = %s, want server", ordersSpan.SpanKind)
+	}
+	if ordersSpan.SpanContext.TraceID() != edgeClientSpan.SpanContext.TraceID() {
+		t.Errorf("Orders trace ID = %s, want Edge trace ID %s", ordersSpan.SpanContext.TraceID(), edgeClientSpan.SpanContext.TraceID())
+	}
+	if ordersSpan.Parent.SpanID() != edgeClientSpan.SpanContext.SpanID() {
+		t.Errorf("Orders parent = %s, want Edge client span %s", ordersSpan.Parent.SpanID(), edgeClientSpan.SpanContext.SpanID())
+	}
+	if serviceName := resourceServiceName(ordersSpan.Resource); serviceName != "orders" {
 		t.Errorf("Orders service.name = %q, want %q", serviceName, "orders")
 	}
 	if serviceName := resourceServiceName(edgeServerSpan.Resource); serviceName != "edge" {
