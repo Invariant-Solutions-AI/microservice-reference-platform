@@ -99,30 +99,11 @@ func TestNewLoggerDeploymentMetadata(t *testing.T) {
 				t.Setenv(name, tt.values[name])
 			}
 
-			previousLogger := slog.Default()
-			t.Cleanup(func() { slog.SetDefault(previousLogger) })
-			reader, writer, err := os.Pipe()
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				_ = reader.Close()
-				_ = writer.Close()
-			})
-			previousStdout := os.Stdout
-			os.Stdout = writer
-			NewLogger("orders")
-			os.Stdout = previousStdout
-			slog.Info("started")
-			if err := writer.Close(); err != nil {
-				t.Fatal(err)
-			}
-			output, err := io.ReadAll(reader)
-			if err != nil {
-				t.Fatal(err)
-			}
+			var output bytes.Buffer
+			logger, _ := newLogger("orders", &output)
+			logger.Info("started")
 			var record map[string]any
-			if err := json.Unmarshal(output, &record); err != nil {
+			if err := json.Unmarshal(output.Bytes(), &record); err != nil {
 				t.Fatal(err)
 			}
 			if record["service"] != "orders" {
@@ -158,38 +139,24 @@ func TestRequestLogUsesServerSpan(t *testing.T) {
 	otel.SetTracerProvider(provider)
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = reader.Close()
-		_ = writer.Close()
-	})
-	previousStdout := os.Stdout
-	os.Stdout = writer
-	level := NewLogger("orders")
-	os.Stdout = previousStdout
-	level.Set(slog.LevelDebug)
+	var output bytes.Buffer
+	logger, _ := newLogger("orders", &output)
+	slog.SetDefault(logger)
 
 	server := newHTTPServer("orders", ":0", http.HandlerFunc(Health))
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	req.Header.Set("traceparent", "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01")
 	server.Handler.ServeHTTP(httptest.NewRecorder(), req)
 
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	output, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatal(err)
-	}
 	var record map[string]any
-	if err := json.Unmarshal(output, &record); err != nil {
+	if err := json.Unmarshal(output.Bytes(), &record); err != nil {
 		t.Fatal(err)
 	}
 	if record["service"] != "orders" {
 		t.Errorf("service = %v, want orders", record["service"])
+	}
+	if record["msg"] != "HTTP request completed" || record["status"] != float64(http.StatusOK) {
+		t.Errorf("unexpected completion log = %v", record)
 	}
 	spans := exporter.GetSpans()
 	if len(spans) != 1 {
@@ -230,5 +197,174 @@ func TestTraceHandlerWithGroupAndLevel(t *testing.T) {
 	}
 	if record.Request.Method != "GET" || record.Request.TraceID != traceID.String() || record.Request.SpanID != spanID.String() {
 		t.Errorf("grouped log record = %+v", record)
+	}
+}
+
+func TestLoggerMinimumLevel(t *testing.T) {
+	var output bytes.Buffer
+	logger, level := newLogger("edge", &output)
+	logger.Debug("hidden")
+	logger.Info("visible")
+
+	var record map[string]any
+	if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+		t.Fatal(err)
+	}
+	if record["msg"] != "visible" || record["level"] != "INFO" {
+		t.Fatalf("default-level output = %v", record)
+	}
+
+	output.Reset()
+	t.Setenv("LOG_LEVEL", "debug")
+	level.Set(ParseLogLevel(os.Getenv("LOG_LEVEL")))
+	logger.Debug("debug enabled")
+	if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+		t.Fatal(err)
+	}
+	if record["msg"] != "debug enabled" || record["level"] != "DEBUG" {
+		t.Errorf("debug-level output = %v", record)
+	}
+
+	output.Reset()
+	level.Set(slog.LevelWarn)
+	logger.Info("hidden")
+	logger.Warn("warning")
+	if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+		t.Fatal(err)
+	}
+	if record["msg"] != "warning" || record["level"] != "WARN" {
+		t.Errorf("warn-level output = %v", record)
+	}
+}
+
+func TestRequestCompletionStatus(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		handler http.HandlerFunc
+		status  int
+	}{
+		{name: "explicit", handler: func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+		}, status: http.StatusBadRequest},
+		{name: "implicit write", handler: func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("ok"))
+		}, status: http.StatusOK},
+		{name: "empty response", handler: func(http.ResponseWriter, *http.Request) {}, status: http.StatusOK},
+		{name: "flush", handler: func(w http.ResponseWriter, _ *http.Request) {
+			w.(http.Flusher).Flush()
+		}, status: http.StatusOK},
+		{name: "first final status", handler: func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+			w.WriteHeader(http.StatusInternalServerError)
+		}, status: http.StatusCreated},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			logger, _ := newLogger("edge", &output)
+			previousLogger := slog.Default()
+			slog.SetDefault(logger)
+			t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+			rec := httptest.NewRecorder()
+			logRequests(tt.handler).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+			var record map[string]any
+			if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+				t.Fatal(err)
+			}
+			if rec.Code != tt.status || record["status"] != float64(tt.status) {
+				t.Errorf("response status = %d, logged status = %v, want %d", rec.Code, record["status"], tt.status)
+			}
+			if duration, ok := record["duration_ms"].(float64); !ok || duration < 0 {
+				t.Errorf("duration_ms = %v, want nonnegative number", record["duration_ms"])
+			}
+			if record["method"] != http.MethodGet || record["msg"] != "HTTP request completed" {
+				t.Errorf("unexpected completion log = %v", record)
+			}
+			if _, ok := record["trace_id"]; ok {
+				t.Errorf("unexpected trace_id in untraced log: %v", record)
+			}
+		})
+	}
+}
+
+func TestRequestCompletionAfterInformationalResponse(t *testing.T) {
+	var output bytes.Buffer
+	logger, _ := newLogger("edge", &output)
+	previousLogger := slog.Default()
+	slog.SetDefault(logger)
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	done := make(chan struct{})
+	handler := newHTTPServer("edge", ":0", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusEarlyHints)
+		w.WriteHeader(http.StatusCreated)
+	})).Handler
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(w, r)
+		close(done)
+	}))
+	t.Cleanup(server.Close)
+	resp, err := server.Client().Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	<-done
+	var record map[string]any
+	if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusCreated || record["status"] != float64(http.StatusCreated) {
+		t.Errorf("response status = %d, logged status = %v, want %d", resp.StatusCode, record["status"], http.StatusCreated)
+	}
+}
+
+type optionalResponseWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (w *optionalResponseWriter) FlushError() error {
+	w.ResponseRecorder.Flush()
+	return nil
+}
+
+func (w *optionalResponseWriter) WriteString(s string) (int, error) {
+	return w.ResponseRecorder.Write([]byte(s))
+}
+
+func TestRequestCompletionWithOptionalWriterMethods(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		write func(http.ResponseWriter)
+	}{
+		{name: "flush error", write: func(w http.ResponseWriter) {
+			_ = http.NewResponseController(w).Flush()
+		}},
+		{name: "write string", write: func(w http.ResponseWriter) {
+			_, _ = io.WriteString(w, "ok")
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			logger, _ := newLogger("edge", &output)
+			previousLogger := slog.Default()
+			slog.SetDefault(logger)
+			t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+			rec := &optionalResponseWriter{ResponseRecorder: httptest.NewRecorder()}
+			handler := logRequests(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				tt.write(w)
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+			var record map[string]any
+			if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+				t.Fatal(err)
+			}
+			if rec.Code != http.StatusOK || record["status"] != float64(http.StatusOK) {
+				t.Errorf("response status = %d, logged status = %v, want 200", rec.Code, record["status"])
+			}
+		})
 	}
 }

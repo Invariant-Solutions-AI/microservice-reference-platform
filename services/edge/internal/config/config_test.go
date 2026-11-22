@@ -3,12 +3,16 @@
 
 package config
 
-import "testing"
+import (
+	"log/slog"
+	"testing"
+)
 
 func TestLoad(t *testing.T) {
 	t.Setenv("EDGE_SERVICE_NAME", "public-edge")
 	t.Setenv("EDGE_ADDR", ":9090")
 	t.Setenv("ORDERS_URL", "http://localhost:8081")
+	t.Setenv("LOG_LEVEL", "debug")
 
 	cfg, err := Load()
 	if err != nil {
@@ -16,6 +20,9 @@ func TestLoad(t *testing.T) {
 	}
 	if cfg.ServiceName != "public-edge" {
 		t.Errorf("ServiceName = %q, want %q", cfg.ServiceName, "public-edge")
+	}
+	if cfg.LogLevel != slog.LevelDebug {
+		t.Errorf("LogLevel = %v, want debug", cfg.LogLevel)
 	}
 
 	if cfg.Addr != ":9090" {

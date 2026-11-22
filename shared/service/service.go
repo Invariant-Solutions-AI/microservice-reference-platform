@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -25,11 +26,17 @@ const (
 )
 
 func NewLogger(serviceName string) *slog.LevelVar {
+	logger, level := newLogger(serviceName, os.Stdout)
+	slog.SetDefault(logger)
+	return level
+}
+
+func newLogger(serviceName string, output io.Writer) (*slog.Logger, *slog.LevelVar) {
 	level := new(slog.LevelVar)
 	level.Set(slog.LevelInfo)
 	logger := slog.New(
 		traceHandler{Handler: slog.NewJSONHandler(
-			os.Stdout,
+			output,
 			&slog.HandlerOptions{Level: level},
 		)},
 	).With("service", serviceName)
@@ -49,14 +56,11 @@ func NewLogger(serviceName string) *slog.LevelVar {
 			logger = logger.With(field.key, value)
 		}
 	}
-	slog.SetDefault(logger)
-	return level
+	return logger, level
 }
 
-func LoadDotEnv() {
-	if err := godotenv.Load(); err != nil {
-		slog.Warn(".env file not loaded")
-	}
+func LoadDotEnv() error {
+	return godotenv.Load()
 }
 
 func ParseLogLevel(level string) slog.Level {
@@ -147,7 +151,7 @@ func Run(serviceName, addr string, handler http.Handler) error {
 func newHTTPServer(serviceName, addr string, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:           addr,
-		Handler:        otelhttp.NewHandler(handler, serviceName),
+		Handler:        otelhttp.NewHandler(logRequests(handler), serviceName),
 		ReadTimeout:    readHeaderTimeout,
 		WriteTimeout:   shutdownTimeout,
 		MaxHeaderBytes: 1 << 20,

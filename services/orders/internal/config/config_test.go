@@ -3,7 +3,10 @@
 
 package config
 
-import "testing"
+import (
+	"log/slog"
+	"testing"
+)
 
 func TestLoadServiceName(t *testing.T) {
 	for _, tt := range []struct {
@@ -20,9 +23,21 @@ func TestLoadServiceName(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load() error = %v", err)
 			}
+
 			if cfg.ServiceName != tt.want {
 				t.Errorf("ServiceName = %q, want %q", cfg.ServiceName, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadDebugLogLevel(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "debug")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.LogLevel != slog.LevelDebug {
+		t.Errorf("LogLevel = %v, want debug", cfg.LogLevel)
 	}
 }

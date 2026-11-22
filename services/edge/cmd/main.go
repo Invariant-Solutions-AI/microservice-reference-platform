@@ -13,11 +13,14 @@ import (
 )
 
 func main() {
-	service.LoadDotEnv()
+	dotenvErr := service.LoadDotEnv()
 
 	// Read the edge address and upstream Orders service URL.
 	cfg, err := config.Load()
 	level := service.NewLogger(cfg.ServiceName)
+	if dotenvErr != nil {
+		slog.Warn(".env file not loaded")
+	}
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)
