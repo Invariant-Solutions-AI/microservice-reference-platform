@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // NewProxy creates a reverse proxy to the specified target URL.
@@ -16,10 +18,11 @@ func NewReverseProxy(
 ) http.Handler {
 	slog.Debug("Creating reverse proxy for target", "target", target.String())
 	return &httputil.ReverseProxy{
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
 		Rewrite: func(req *httputil.ProxyRequest) {
-			slog.Debug("Rewriting request for proxy", "original_path", req.In.URL.Path, "target", target.String())
+			slog.DebugContext(req.In.Context(), "Rewriting request for proxy", "original_path", req.In.URL.Path, "target", target.String())
 			req.SetURL(target)
-			slog.Debug("Request URL set for proxy", "new_path", req.Out.URL.Path)
+			slog.DebugContext(req.Out.Context(), "Request URL set for proxy", "new_path", req.Out.URL.Path)
 			req.SetXForwarded()
 		},
 		ErrorHandler: proxyErrorHandler,
@@ -28,9 +31,9 @@ func NewReverseProxy(
 
 func proxyErrorHandler(
 	w http.ResponseWriter,
-	_ *http.Request,
+	r *http.Request,
 	err error) {
-	slog.Error("Proxy error", "error", err)
+	slog.ErrorContext(r.Context(), "Proxy error", "error", err)
 	http.Error(
 		w,
 		http.StatusText(http.StatusBadGateway),

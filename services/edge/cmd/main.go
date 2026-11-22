@@ -12,14 +12,12 @@ import (
 	"github.com/invariant-solutions-ai/microservice-reference-platform/shared/service"
 )
 
-const serverName = "edge"
-
 func main() {
-	level := service.NewLogger(serverName)
 	service.LoadDotEnv()
 
 	// Read the edge address and upstream Orders service URL.
 	cfg, err := config.Load()
+	level := service.NewLogger(cfg.ServiceName)
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)
@@ -28,7 +26,7 @@ func main() {
 	level.Set(cfg.LogLevel)
 
 	handler := server.NewHandler(cfg.OrdersURL)
-	if err := service.Run(serverName, cfg.Addr, handler); err != nil {
+	if err := service.Run(cfg.ServiceName, cfg.Addr, handler); err != nil {
 		slog.Error("failed to run the application", "error", err)
 		os.Exit(1)
 	}

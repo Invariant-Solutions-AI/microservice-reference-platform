@@ -10,14 +10,22 @@ import (
 	"github.com/invariant-solutions-ai/microservice-reference-platform/shared/service"
 )
 
-const defaultOrdersPort = ":8081"
+const (
+	defaultOrdersPort  = ":8081"
+	defaultServiceName = "orders"
+)
 
 type Config struct {
-	Addr     string
-	LogLevel slog.Level
+	ServiceName string
+	Addr        string
+	LogLevel    slog.Level
 }
 
 func Load() (Config, error) {
+	serviceName := os.Getenv("ORDERS_SERVICE_NAME")
+	if serviceName == "" {
+		serviceName = defaultServiceName
+	}
 	addr := os.Getenv("ORDERS_ADDR")
 	if addr == "" {
 		addr = defaultOrdersPort
@@ -28,7 +36,8 @@ func Load() (Config, error) {
 	slog.Debug("LOG_LEVEL", "value", logLevel)
 
 	return Config{
-		Addr:     addr,
-		LogLevel: logLevel,
+		ServiceName: serviceName,
+		Addr:        addr,
+		LogLevel:    logLevel,
 	}, nil
 }

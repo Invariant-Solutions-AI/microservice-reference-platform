@@ -12,15 +12,24 @@ import (
 	"github.com/invariant-solutions-ai/microservice-reference-platform/shared/service"
 )
 
-const defaultEdgePort = ":8080"
+const (
+	defaultEdgePort    = ":8080"
+	defaultServiceName = "edge"
+)
 
 type Config struct {
-	Addr      string
-	OrdersURL *url.URL
-	LogLevel  slog.Level
+	ServiceName string
+	Addr        string
+	OrdersURL   *url.URL
+	LogLevel    slog.Level
 }
 
 func Load() (Config, error) {
+	serviceName := os.Getenv("EDGE_SERVICE_NAME")
+	if serviceName == "" {
+		serviceName = defaultServiceName
+	}
+	cfg := Config{ServiceName: serviceName}
 	addr := os.Getenv("EDGE_ADDR")
 	if addr == "" {
 		addr = defaultEdgePort
@@ -28,7 +37,7 @@ func Load() (Config, error) {
 	slog.Debug("EDGE_ADDR", "value", addr)
 	value := os.Getenv("ORDERS_URL")
 	if value == "" {
-		return Config{}, fmt.Errorf(
+		return cfg, fmt.Errorf(
 			"ORDERS_URL is required",
 		)
 	}
@@ -36,7 +45,7 @@ func Load() (Config, error) {
 
 	ordersURL, err := url.Parse(value)
 	if err != nil {
-		return Config{}, fmt.Errorf(
+		return cfg, fmt.Errorf(
 			"parse ORDERS_URL: %w",
 			err,
 		)
@@ -44,7 +53,7 @@ func Load() (Config, error) {
 	slog.Debug("Parsed ORDERS_URL", "value", ordersURL.String())
 	if ordersURL.Scheme == "" ||
 		ordersURL.Host == "" {
-		return Config{}, fmt.Errorf(
+		return cfg, fmt.Errorf(
 			"ORDERS_URL must be an absolute URL",
 		)
 	}
@@ -53,8 +62,9 @@ func Load() (Config, error) {
 	slog.Debug("LOG_LEVEL", "value", logLevel)
 
 	return Config{
-		Addr:      addr,
-		OrdersURL: ordersURL,
-		LogLevel:  logLevel,
+		ServiceName: serviceName,
+		Addr:        addr,
+		OrdersURL:   ordersURL,
+		LogLevel:    logLevel,
 	}, nil
 }

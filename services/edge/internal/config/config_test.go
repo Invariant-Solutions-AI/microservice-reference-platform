@@ -6,12 +6,16 @@ package config
 import "testing"
 
 func TestLoad(t *testing.T) {
+	t.Setenv("EDGE_SERVICE_NAME", "public-edge")
 	t.Setenv("EDGE_ADDR", ":9090")
 	t.Setenv("ORDERS_URL", "http://localhost:8081")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ServiceName != "public-edge" {
+		t.Errorf("ServiceName = %q, want %q", cfg.ServiceName, "public-edge")
 	}
 
 	if cfg.Addr != ":9090" {
@@ -32,12 +36,16 @@ func TestLoad(t *testing.T) {
 }
 
 func TestLoadUsesDefaultAddress(t *testing.T) {
+	t.Setenv("EDGE_SERVICE_NAME", "")
 	t.Setenv("EDGE_ADDR", "")
 	t.Setenv("ORDERS_URL", "http://localhost:8081")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ServiceName != "edge" {
+		t.Errorf("ServiceName = %q, want %q", cfg.ServiceName, "edge")
 	}
 
 	if cfg.Addr != ":8080" {
@@ -50,11 +58,15 @@ func TestLoadUsesDefaultAddress(t *testing.T) {
 }
 
 func TestLoadRequiresOrdersURL(t *testing.T) {
+	t.Setenv("EDGE_SERVICE_NAME", "public-edge")
 	t.Setenv("ORDERS_URL", "")
 
-	_, err := Load()
+	cfg, err := Load()
 	if err == nil {
 		t.Fatal("Load() error = nil, want error")
+	}
+	if cfg.ServiceName != "public-edge" {
+		t.Errorf("ServiceName on config error = %q, want %q", cfg.ServiceName, "public-edge")
 	}
 }
 

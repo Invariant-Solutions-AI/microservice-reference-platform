@@ -16,6 +16,7 @@ import (
 
 	"github.com/invariant-solutions-ai/microservice-reference-platform/shared/observability"
 	"github.com/joho/godotenv"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
@@ -27,11 +28,27 @@ func NewLogger(serviceName string) *slog.LevelVar {
 	level := new(slog.LevelVar)
 	level.Set(slog.LevelInfo)
 	logger := slog.New(
-		slog.NewJSONHandler(
+		traceHandler{Handler: slog.NewJSONHandler(
 			os.Stdout,
 			&slog.HandlerOptions{Level: level},
-		),
+		)},
 	).With("service", serviceName)
+
+	for _, field := range []struct {
+		env string
+		key string
+	}{
+		{env: "SERVICE_VERSION", key: "service_version"},
+		{env: "DEPLOYMENT_ENVIRONMENT", key: "deployment_environment"},
+		{env: "POD_UID", key: "service_instance_id"},
+		{env: "POD_NAME", key: "k8s_pod_name"},
+		{env: "POD_NAMESPACE", key: "k8s_namespace_name"},
+		{env: "NODE_NAME", key: "k8s_node_name"},
+	} {
+		if value := os.Getenv(field.env); value != "" {
+			logger = logger.With(field.key, value)
+		}
+	}
 	slog.SetDefault(logger)
 	return level
 }
@@ -57,13 +74,13 @@ func ParseLogLevel(level string) slog.Level {
 	}
 }
 
-func Health(w http.ResponseWriter, _ *http.Request) {
-	slog.Debug("Health check requested")
+func Health(w http.ResponseWriter, r *http.Request) {
+	slog.DebugContext(r.Context(), "Health check requested")
 	w.WriteHeader(http.StatusOK)
 }
 
-func Ready(w http.ResponseWriter, _ *http.Request) {
-	slog.Debug("Readiness check requested")
+func Ready(w http.ResponseWriter, r *http.Request) {
+	slog.DebugContext(r.Context(), "Readiness check requested")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -90,13 +107,7 @@ func Run(serviceName, addr string, handler http.Handler) error {
 		}
 	}()
 
-	server := &http.Server{
-		Addr:           addr,
-		Handler:        handler,
-		ReadTimeout:    readHeaderTimeout,
-		WriteTimeout:   shutdownTimeout,
-		MaxHeaderBytes: 1 << 20,
-	}
+	server := newHTTPServer(serviceName, addr, handler)
 	serverErrors := make(chan error, 1)
 
 	go func() {
@@ -131,4 +142,14 @@ func Run(serviceName, addr string, handler http.Handler) error {
 
 	slog.Info(serviceName + " service stopped")
 	return nil
+}
+
+func newHTTPServer(serviceName, addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:           addr,
+		Handler:        otelhttp.NewHandler(handler, serviceName),
+		ReadTimeout:    readHeaderTimeout,
+		WriteTimeout:   shutdownTimeout,
+		MaxHeaderBytes: 1 << 20,
+	}
 }

@@ -4,11 +4,15 @@
 package routing
 
 import (
+	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestReverseProxy(t *testing.T) {
@@ -215,5 +219,50 @@ func TestReverseProxyReturnsBadGatewayWhenUpstreamFails(
 			rec.Code,
 			http.StatusBadGateway,
 		)
+	}
+}
+
+type contextLogHandler struct {
+	contexts map[string]trace.SpanContext
+}
+
+func (h *contextLogHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *contextLogHandler) Handle(ctx context.Context, record slog.Record) error {
+	h.contexts[record.Message] = trace.SpanContextFromContext(ctx)
+	return nil
+}
+func (h *contextLogHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *contextLogHandler) WithGroup(string) slog.Handler      { return h }
+
+func TestProxyRequestLogsUseRequestContext(t *testing.T) {
+	target, err := url.Parse("http://127.0.0.1:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := Orders(NewReverseProxy(target))
+	logs := &contextLogHandler{contexts: make(map[string]trace.SpanContext)}
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(logs))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	traceID, _ := trace.TraceIDFromHex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	spanID, _ := trace.SpanIDFromHex("bbbbbbbbbbbbbbbb")
+	spanContext := trace.NewSpanContext(trace.SpanContextConfig{TraceID: traceID, SpanID: spanID})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/orders", nil)
+	req = req.WithContext(trace.ContextWithSpanContext(req.Context(), spanContext))
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	for _, message := range []string{
+		"Original request path",
+		"Trimmed request path",
+		"Request path set for proxy",
+		"Rewriting request for proxy",
+		"Request URL set for proxy",
+		"Proxy error",
+	} {
+		got, ok := logs.contexts[message]
+		if !ok || got.TraceID() != traceID || got.SpanID() != spanID {
+			t.Errorf("%q context = %v, want %s/%s", message, got, traceID, spanID)
+		}
 	}
 }
