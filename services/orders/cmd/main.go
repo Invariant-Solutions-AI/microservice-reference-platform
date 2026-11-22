@@ -8,10 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
+	"time"
 
-	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/httpapi"
+	"github.com/google/uuid"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/application/orders"
 	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/config"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/persistence/postgres"
+	"github.com/invariant-solutions-ai/microservice-reference-platform/services/orders/internal/server"
 	"github.com/invariant-solutions-ai/microservice-reference-platform/shared/service"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -43,7 +48,12 @@ func run() error {
 	}
 	defer pool.Close()
 
-	handler := httpapi.NewHandler(pool.Ping)
+	return service.Run(cfg.ServiceName, cfg.Addr, newHandler(pool))
+}
 
-	return service.Run(cfg.ServiceName, cfg.Addr, handler)
+func newHandler(pool *pgxpool.Pool) http.Handler {
+	repository := postgres.NewOrderRepository(pool)
+	createOrder := orders.NewCreateOrder(repository, uuid.New, time.Now)
+	getOrder := orders.NewGetOrder(repository)
+	return server.NewHandler(createOrder, getOrder, pool.Ping)
 }

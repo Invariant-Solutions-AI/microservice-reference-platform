@@ -8,7 +8,7 @@ Accepted
 
 The Orders domain needs persistent state, while the Edge service must remain independent of Orders business data and implementation. Direct database access from a second service would couple deployment, scaling, and schema evolution.
 
-The current implementation is still completing the persistence milestone, so production storage is not yet interchangeable with the initial in-memory repository.
+The Orders service uses PostgreSQL for persistent storage behind its domain repository interface.
 
 ## Decision
 
@@ -23,8 +23,8 @@ The in-memory implementation is a valid initial repository implementation, but i
 - `services/orders/internal/persistence/memory` provides a thread-safe in-process repository.
 - `services/orders/internal/domain/order.Repository` defines the persistence boundary.
 - `services/orders/migrations/000001_create_orders.sql` defines the PostgreSQL schema.
-- `deployments/compose/compose.yaml` starts PostgreSQL for local development.
-- The running Orders API does not yet use a PostgreSQL repository.
+- `deployments/compose/compose.yaml` starts PostgreSQL and applies migrations for local development.
+- The running Orders API uses the PostgreSQL repository.
 
 Local PostgreSQL configuration is in `.env.example`; migrations can be applied with Goose.
 
@@ -38,7 +38,6 @@ Local PostgreSQL configuration is in `.env.example`; migrations can be applied w
 
 ### Negative
 
-- Data is lost when the Orders process restarts until PostgreSQL persistence is wired.
 - Migration and deployment coordination are required before production use.
 
 ## Guardrails

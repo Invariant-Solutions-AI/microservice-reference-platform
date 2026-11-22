@@ -2,16 +2,63 @@
 # SPDX-License-Identifier: Apache-2.0
 
 services:
+  edge:
+    build:
+      context: ../..
+      dockerfile: services/edge/Dockerfile
+    restart: unless-stopped
+    environment:
+      ORDERS_URL: http://orders:8081
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    ports:
+      - "127.0.0.1:${EDGE_PORT:-8080}:8080"
+    depends_on:
+      orders:
+        condition: service_started
+      otel-collector:
+        condition: service_started
+
+  orders:
+    build:
+      context: ../..
+      dockerfile: services/orders/Dockerfile
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DATABASE: orders
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: local-development-only
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    ports:
+      - "127.0.0.1:${ORDERS_PORT:-8081}:8081"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+
+  migrate:
+    image: ghcr.io/pressly/goose:v3.30.1
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: "host=postgres port=5432 user=orders password=local-development-only dbname=orders sslmode=disable"
+    volumes:
+      - ../../services/orders/migrations:/migrations:ro
+    command: ["up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
-    container_name: microservice-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: orders
       POSTGRES_USER: orders
       POSTGRES_PASSWORD: local-development-only
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -19,6 +66,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.140.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "127.0.0.1:${OTEL_PORT:-4318}:4318"
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
 
 volumes:
   postgres-data:

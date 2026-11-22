@@ -20,22 +20,38 @@ Client -> Edge Service -> Orders Service -> PostgreSQL
 ## Repository structure
 
 - `services/edge` - HTTP edge, reverse proxy, health/readiness, and tracing
-- `services/orders` - Orders HTTP API, domain/application code, and in-memory repository
+- `services/orders` - Orders HTTP API, domain/application code, and PostgreSQL repository
 - `shared/service` - shared logging and HTTP server lifecycle
 - `shared/observability` - OpenTelemetry setup and OTLP export
-- `deployments/compose` - local PostgreSQL for development
+- `deployments/compose` - local platform and telemetry collector
 - `docs` - architecture and architecture decision records
 - `go.work` - local Go workspace
 
 ## Development
 
-Copy `.env.example` to `.env`, then start the local PostgreSQL container:
+Start the platform, including PostgreSQL, schema migrations, and the OpenTelemetry
+Collector, from the repository root:
 
 ```sh
-docker compose -f deployments/compose/compose.yaml up -d
+docker compose -f deployments/compose/compose.yaml up -d --build
 ```
 
-Run the services in separate terminals:
+Edge is available at `http://localhost:8080` and Orders at
+`http://localhost:8081`. The collector logs received traces; inspect them with
+`docker compose -f deployments/compose/compose.yaml logs otel-collector`.
+PostgreSQL data persists in the `postgres-data` volume across container restarts.
+Stop the platform with `docker compose -f deployments/compose/compose.yaml down`;
+do not use `-v` if you want to retain the data. To avoid port conflicts, set
+`EDGE_PORT`, `ORDERS_PORT`, `POSTGRES_PORT`, or `OTEL_PORT` when starting Compose.
+
+To run the Go services outside Docker instead, copy `.env.example` to `.env`,
+start PostgreSQL, the migration job, and the collector:
+
+```sh
+docker compose -f deployments/compose/compose.yaml up -d postgres migrate otel-collector
+```
+
+Then run the services in separate terminals:
 
 ```sh
 make run-edge
@@ -57,8 +73,6 @@ PostgreSQL repository integration tests run when `ORDERS_TEST_DATABASE_URL` is s
 to a PostgreSQL connection string. The database user must be able to create and
 drop schemas; each test uses its own temporary schema and applies the Orders migration.
 Without the variable, these tests are skipped.
-
-The Orders API is currently backed by an in-memory repository. PostgreSQL migrations are prepared in `services/orders/migrations/`; the running service is not yet wired to PostgreSQL.
 
 ## License
 

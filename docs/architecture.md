@@ -8,7 +8,7 @@ The initial implementation deliberately starts small. The first vertical slice i
 
 `Client -> Edge Service -> Orders Service -> PostgreSQL`
 
-The initial implementation includes HTTP routing, structured logging, W3C trace-context propagation through OpenTelemetry, and shared runtime infrastructure modules. PostgreSQL is available for local development and has an Orders migration, but the Orders API currently uses an in-memory repository. Asynchronous messaging and Kubernetes deployment remain deferred.
+The initial implementation includes HTTP routing, structured logging, W3C trace-context propagation through OpenTelemetry, PostgreSQL-backed Orders storage, and shared runtime infrastructure modules. Asynchronous messaging and Kubernetes deployment remain deferred.
 
 ## Architecture Principles
 
@@ -34,9 +34,7 @@ Services communicate through explicit network or messaging contracts rather than
 
 A service owns the persistent data required by its domain. Other services do not access that database directly.
 
-The initial Orders service will own its PostgreSQL schema and persistence implementation.
-
-The current implementation uses an in-memory repository in-process. The PostgreSQL migration and Docker Compose service are local-development preparation; adding the PostgreSQL repository implementation is a separate persistence milestone.
+The Orders service owns its PostgreSQL schema, migrations, and persistence implementation.
 
 ### Explicit contracts
 
@@ -75,7 +73,7 @@ Responsibilities:
 
 ### PostgreSQL
 
-PostgreSQL is provisioned for the Orders service through local Compose configuration and is the intended persistent store. The schema migration is present, but the running Orders service still uses its in-memory repository.
+PostgreSQL is provisioned for the Orders service through local Compose configuration, which applies schema migrations before starting Orders.
 
 Only the Orders service accesses the Orders database directly.
 
@@ -85,7 +83,7 @@ Only the Orders service accesses the Orders database directly.
 2. The edge service applies boundary-level middleware and determines the destination route.
 3. The edge service forwards the request to the Orders service.
 4. The Orders service executes application and domain behavior.
-5. The Orders service reads or writes repository data (currently in-memory) as required.
+5. The Orders service reads or writes PostgreSQL repository data as required.
 6. The response returns through the edge service to the client.
 
 Authentication will be added as a later milestone. Until then, the architecture preserves the location where authentication belongs without introducing a fake production identity solution.
@@ -148,10 +146,9 @@ The following capabilities are intentionally outside the initial vertical slice:
 - catalog service;
 - Kubernetes manifests;
 - production secret management;
-- persistent PostgreSQL-backed Orders storage; and
 - load and resilience testing.
 
-The platform does have distributed trace propagation and OTLP export implemented through OpenTelemetry, but it does not include a collector or tracing backend in local Compose configuration.
+The platform has distributed trace propagation and OTLP export through OpenTelemetry. Local Compose includes a collector that logs received traces, but no tracing backend.
 
 They will be introduced through separate architecture decisions and commit-sized changes when the project reaches those milestones.
 
