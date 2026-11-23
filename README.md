@@ -85,7 +85,7 @@ the local database. To change the host ports, set `EDGE_PORT`, `ORDERS_PORT`,
 
 ## Run services outside Docker
 
-Go `1.27.3` is required. If you do not already have a local `.env`, copy
+Go `1.27.4` is required. If you do not already have a local `.env`, copy
 `.env.example` to `.env` in the repository root. The service binaries load this
 file when started from the root. Start the database, migration job, and collector:
 
@@ -107,7 +107,7 @@ The sample database password is for local development only.
 
 ## Development and CI
 
-Install Go `1.27.3`, Git, GNU Make, PowerShell (`pwsh`), and Docker Compose v2
+Install Go `1.27.4`, Git, GNU Make, PowerShell (`pwsh`), and Docker Compose v2
 for the full local checks. Run:
 
 ```sh

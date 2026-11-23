@@ -1,7 +1,7 @@
 # Copyright 2026 Invariant Solutions LLC
 # SPDX-License-Identifier: Apache-2.0
 
-ARG GO_VERSION=1.27.3
+ARG GO_VERSION=1.27.4
 
 FROM golang:${GO_VERSION}-alpine AS build
 

@@ -1,6 +1,6 @@
 module github.com/invariant-solutions-ai/microservice-reference-platform/shared/observability
 
-go 1.27.3
+go 1.27.4
 
 require (
 	go.opentelemetry.io/otel v1.47.0
