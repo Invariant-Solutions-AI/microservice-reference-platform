@@ -83,6 +83,8 @@ drop schemas; each test uses its own temporary schema and applies the Orders mig
 Without the variable, these tests are skipped.
 The GitHub Actions build and test workflow also checks module tidiness and
 workspace synchronization and runs the race and PostgreSQL integration tests.
+It also builds the container images and tests the Compose platform, including
+order persistence after an Orders restart.
 
 ## License
 

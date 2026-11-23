@@ -71,3 +71,21 @@ jobs:
         run: go -C services/orders test -count=1 ./cmd ./internal/persistence/postgres ./internal/server
       - name: Vet
         run: make vet
+
+  containers:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_FILE: deployments/compose/compose.yaml
+      COMPOSE_PROJECT_NAME: container-ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start containers
+        run: docker compose up -d --build
+      - name: Test containerized platform
+        run: pwsh -NoProfile -File scripts/test-containers.ps1
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Clean up
+        if: always()
+        run: docker compose down --volumes
