@@ -1,0 +1,8 @@
+go 1.27.3
+
+use (
+	./services/edge
+	./services/orders
+	./shared/observability
+	./shared/service
+)

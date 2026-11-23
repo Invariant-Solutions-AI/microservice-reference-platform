@@ -81,6 +81,8 @@ PostgreSQL repository integration tests run when `ORDERS_TEST_DATABASE_URL` is s
 to a PostgreSQL connection string. The database user must be able to create and
 drop schemas; each test uses its own temporary schema and applies the Orders migration.
 Without the variable, these tests are skipped.
+The GitHub Actions build and test workflow also checks module tidiness and
+workspace synchronization and runs the race and PostgreSQL integration tests.
 
 ## License
 
