@@ -1,90 +1,141 @@
 # microservice-reference-platform
 
-A production-oriented reference architecture for building secure, observable, independently deployable Go microservices.
+A reference implementation for building independently deployable Go microservices
+behind a thin HTTP edge service.
 
-> **Status:** Active development. The first milestone establishes a working HTTP vertical slice through an edge service and an orders service.
+> **Release scope:** The initial public release demonstrates an early working
+> vertical slice; this is not a production-ready application or deployment
+> template. Review the [architecture](docs/architecture.md) and [security
+> policy](SECURITY.md) before adapting it.
 
-## Goals
+## What is included
 
-- Keep services independently deployable.
-- Use a thin edge service for authentication and routing concerns.
-- Keep business logic inside domain services.
-- Give each service ownership of its persistent data.
-- Add cross-service infrastructure only when a real shared need emerges.
-- Keep local development simple and portable to Kubernetes.
+- An HTTP edge service that routes Orders requests.
+- An Orders service with domain and application layers and PostgreSQL persistence.
+- Shared structured logging, graceful HTTP server lifecycle, and OpenTelemetry
+  trace-context propagation and OTLP export.
+- A local Docker Compose environment with PostgreSQL migrations and an
+  OpenTelemetry Collector.
+- Go unit and integration tests and CI checks for build quality, dependencies,
+  known Go vulnerabilities, and container behavior.
 
-## Planned first vertical slice
+Authentication and authorization, asynchronous messaging, Kubernetes
+deployment, and production secret management are not implemented. Do not expose
+the sample services to untrusted networks or use the Compose credentials in a
+deployed environment. See [Deferred Capabilities](docs/architecture.md#deferred-capabilities)
+for the current scope.
 
-Client -> Edge Service -> Orders Service -> PostgreSQL
+## Run locally
 
-## Repository structure
-
-- `services/edge` - HTTP edge, reverse proxy, health/readiness, and tracing
-- `services/orders` - Orders HTTP API, domain/application code, and PostgreSQL repository
-- `shared/service` - shared logging and HTTP server lifecycle
-- `shared/observability` - OpenTelemetry setup and OTLP export
-- `deployments/compose` - local platform and telemetry collector
-- `docs` - architecture and architecture decision records
-- `go.work` - local Go workspace
-
-## Development
-
-Start the platform, including PostgreSQL, schema migrations, and the OpenTelemetry
-Collector, from the repository root:
+You need Docker Engine with Docker Compose v2. From the repository root, build
+and start the platform:
 
 ```sh
 docker compose -f deployments/compose/compose.yaml up -d --build
 ```
 
-Edge is available at `http://localhost:8080` and Orders at
-`http://localhost:8081`. The collector logs received traces; inspect them with
-`docker compose -f deployments/compose/compose.yaml logs otel-collector`.
-PostgreSQL data persists in the `postgres-data` volume across container restarts.
-Stop the platform with `docker compose -f deployments/compose/compose.yaml down`;
-do not use `-v` if you want to retain the data. To avoid port conflicts, set
-`EDGE_PORT`, `ORDERS_PORT`, `POSTGRES_PORT`, or `OTEL_PORT` when starting Compose.
+The edge service is available at `http://localhost:8080`; the Orders service is
+also exposed directly at `http://localhost:8081` for local development. Compose
+binds these ports to loopback. It starts PostgreSQL, applies the Orders schema
+migration, and starts the OpenTelemetry Collector. The collector logs received
+traces; no tracing backend is included.
 
-To run the Go services outside Docker instead, copy `.env.example` to `.env`,
-start PostgreSQL, the migration job, and the collector:
+Check service health and readiness:
+
+```sh
+curl -i http://localhost:8080/health
+curl -i http://localhost:8081/ready
+```
+
+Create and retrieve an order through the edge API:
+
+```sh
+curl -i -X POST http://localhost:8080/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customerId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "items": [
+      {
+        "productId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "quantity": 2
+      }
+    ]
+  }'
+```
+
+The response includes the generated `orderId`; use it to retrieve the order:
+
+```sh
+curl -i http://localhost:8080/api/v1/orders/REPLACE_WITH_ORDER_ID
+```
+
+See the [Orders API reference](docs/api.md) for routes, request validation, and
+error responses.
+
+PostgreSQL data persists in the `postgres-data` volume across restarts. Stop
+the platform with:
+
+```sh
+docker compose -f deployments/compose/compose.yaml down
+```
+
+This keeps the database volume. Add `--volumes` only when you intend to delete
+the local database. To change the host ports, set `EDGE_PORT`, `ORDERS_PORT`,
+`POSTGRES_PORT`, or `OTEL_PORT` before running Compose.
+
+## Run services outside Docker
+
+Go `1.27.3` is required. If you do not already have a local `.env`, copy
+`.env.example` to `.env` in the repository root. The service binaries load this
+file when started from the root. Start the database, migration job, and collector:
 
 ```sh
 docker compose -f deployments/compose/compose.yaml up -d postgres migrate otel-collector
 ```
 
-Then run the services in separate terminals:
+In separate terminals, run:
 
 ```sh
 make run-edge
 make run-orders
 ```
 
-Edge defaults to `:8080`, Orders defaults to `:8081`, and `ORDERS_URL` must point to the Orders service.
-Orders `/health` reports liveness; `/ready` checks PostgreSQL connectivity using
-the `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DATABASE`, `POSTGRES_USER`, and
-`POSTGRES_PASSWORD` settings. It returns 503 when PostgreSQL is unavailable.
-New orders allow a quantity of 1 to 1,000 per item.
+The Orders service defaults to PostgreSQL TLS verification
+(`PGSSLMODE=verify-full`). The example `.env` sets `PGSSLMODE=disable` only for
+the local Compose database. Keep TLS verification enabled for remote databases.
+The sample database password is for local development only.
 
-Orders defaults to PostgreSQL `sslmode=verify-full`, which verifies the server
-certificate and hostname. Configure trusted CA certificates via `PGSSLROOTCERT`
-when necessary. Local Compose and `.env.example` explicitly set
-`PGSSLMODE=disable` for the development-only PostgreSQL instance; add that
-setting to an existing local `.env` as needed. Do not disable TLS for remote
-databases.
+## Development and CI
 
-Run formatting, license, build, test, and vet checks with:
+Install Go `1.27.3`, Git, GNU Make, PowerShell (`pwsh`), and Docker Compose v2
+for the full local checks. Run:
 
 ```sh
 make pre-commit
 ```
 
-PostgreSQL repository integration tests run when `ORDERS_TEST_DATABASE_URL` is set
-to a PostgreSQL connection string. The database user must be able to create and
-drop schemas; each test uses its own temporary schema and applies the Orders migration.
-Without the variable, these tests are skipped.
-The GitHub Actions build and test workflow also checks module tidiness and
-workspace synchronization and runs the race and PostgreSQL integration tests.
-It also builds the container images and tests the Compose platform, including
-order persistence after an Orders restart.
+This runs formatting and license checks, module tidying, vet, builds, and unit
+tests. The module-tidying step can update `go.mod` or `go.sum`; review any such
+changes. PostgreSQL integration tests require `ORDERS_TEST_DATABASE_URL` and a
+database user that can create and drop schemas.
+
+GitHub Actions also runs race tests, PostgreSQL integration tests, container
+smoke tests (including persistence across an Orders restart), dependency
+review on pull requests, and `govulncheck` across all Go modules.
+
+See [Contributing](CONTRIBUTING.md) for contributor guidelines and local hook
+setup.
+
+## Repository structure
+
+- `services/edge` - external HTTP edge, routing, health/readiness, and tracing
+- `services/orders` - Orders API, domain/application code, PostgreSQL repository,
+  and migrations
+- `shared/service` - shared logging and HTTP server lifecycle
+- `shared/observability` - OpenTelemetry setup and OTLP export
+- `deployments/compose` - local services and telemetry collector
+- `docs` - architecture, API reference, and architecture decision records
+- `go.work` - local Go workspace
 
 ## License
 

@@ -74,9 +74,14 @@ git config --local core.hooksPath .githooks
 ```
 
 On Linux, also run `chmod +x .githooks/pre-commit`. Run `make pre-commit`
-manually to perform the same checks: formatting, license headers, build,
-tests, and vet. These check the working tree, including unstaged changes,
-and do not modify files.
+manually to perform the same checks: formatting, license headers, module
+tidiness, build, tests, and vet. These checks include unstaged changes. The
+module-tidiness step runs `go mod tidy` and may update `go.mod` or `go.sum`;
+review and include intended dependency changes.
+
+GitHub Actions also runs race tests, PostgreSQL integration tests, container
+smoke tests, dependency review for pull requests, and `govulncheck` across the
+Go modules. A pull request should pass these checks before it is merged.
 
 ## Pull requests
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`microservice-reference-platform` is a production-oriented reference architecture for independently deployable Go microservices behind a thin edge service.
+`microservice-reference-platform` is an early-stage reference architecture for independently deployable Go microservices behind a thin edge service. It is not a production-ready application or deployment template.
 
 The initial implementation deliberately starts small. The first vertical slice is:
 
@@ -99,11 +99,13 @@ Allowed dependency direction:
 
 Disallowed dependency direction:
 
-- Edge must not import the Orders implementation module.
+- Production Edge code must not import the Orders implementation module.
 - Orders must not import the Edge implementation module.
 - One domain service must not import another domain service's implementation.
 - One service must not directly query another service's database.
-- Runtime service communication is over HTTP; test code may assemble both handlers in-process.
+- Runtime service communication is over HTTP. Edge test code may import the Orders HTTP API to assemble both handlers in-process.
+
+The Edge module's test-only dependency on the Orders HTTP API is why the Edge Docker build context includes the Orders module: its `go.mod` uses a local replacement for that module.
 
 ## Planned Repository Shape
 

@@ -4,10 +4,15 @@
 
 Please do not open a public issue for a suspected security vulnerability.
 
-Until a dedicated security contact is published, use GitHub's private vulnerability reporting feature when it is available for this repository.
+Use GitHub's private vulnerability reporting feature if it is enabled for this
+repository. There is no separate security contact currently published. Do not
+disclose vulnerability details publicly while seeking a reporting channel.
 
 Include enough information to reproduce and assess the issue, but do not include credentials, access tokens, private customer data, or other secrets.
 
 ## Supported versions
 
-This project is under active development. Security fixes will target the current development version until a stable release policy is published.
+This project is under active development. Until a release-support policy is
+published, security fixes target the current default branch; support windows
+for tagged versions are not defined. There is no published response-time
+commitment.
