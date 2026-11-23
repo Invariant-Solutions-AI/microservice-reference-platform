@@ -13,6 +13,6 @@ Include enough information to reproduce and assess the issue, but do not include
 ## Supported versions
 
 This project is under active development. Until a release-support policy is
-published, security fixes target the current default branch; support windows
-for tagged versions are not defined. There is no published response-time
-commitment.
+published, security fixes target the current default branch. The `v0.1.0` initial
+public release is documented, but its support window is not defined. There is
+no published response-time commitment.
